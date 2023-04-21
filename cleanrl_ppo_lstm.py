@@ -106,11 +106,13 @@ def train(
                 )
         )
 
-    agent = agent.to(device)
-    optimizer = optim.Adam(agent.parameters(), lr=learning_rate, eps=1e-5)
+    data_parallel_agent = nn.DataParallel(agent)
+    optimizer = optim.Adam(data_parallel_agent.parameters(), lr=learning_rate, eps=1e-5)
     if resume_state is not None:
         agent.load_state_dict(resume_state['agent_state_dict'])
         optimizer.load_state_dict(resume_state['optimizer_state_dict'])
+
+    data_parallel_agent = agent.to(device)
 
     # ALGO Logic: Storage setup
     obs = torch.zeros((num_steps, num_buffers, num_envs * num_agents) + binding.single_observation_space.shape).to(device)

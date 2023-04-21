@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import cleanrl_ppo_lstm
 import pufferlib.emulation
 import pufferlib.registry.nmmo
