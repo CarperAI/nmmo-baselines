@@ -11,7 +11,7 @@ from feature_extractor.entity_helper import EntityHelper
 
 from model.realikun.model import ModelArchitecture
 
-from tests.feature_extractor.testhelpers import FeaturizerTestTemplate, provide_item
+from tests.featurizer.testhelpers import FeaturizerTestTemplate, provide_item
 
 ItemAttr = ItemState.State.attr_name_to_col
 

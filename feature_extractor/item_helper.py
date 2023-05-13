@@ -159,7 +159,7 @@ class ItemHelper:
     self.force_buy_idx = None
 
   def reset(self):
-    pass
+    self._reset_obs_best_force()
 
   def _reset_obs_best_force(self):
     self._obs_inv: Dict = {}

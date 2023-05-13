@@ -6,7 +6,8 @@ from nmmo.core.realm import Realm
 
 from scripted import baselines
 
-from team_helper import TeamHelper
+from lib.team.team_helper import TeamHelper
+from model.realikun.model import ModelArchitecture
 
 class FeatureTestConfig(nmmo.config.Medium, nmmo.config.AllGameSystems):
   RENDER = False
@@ -18,6 +19,7 @@ class FeatureTestConfig(nmmo.config.Medium, nmmo.config.AllGameSystems):
     baselines.Alchemist, baselines.Melee, baselines.Range, baselines.Mage,
     baselines.Fisher, baselines.Herbalist, baselines.Prospector, baselines.Carver,
     baselines.Alchemist, baselines.Melee, baselines.Range, baselines.Mage]
+  PLAYER_N = len(PLAYERS) * ModelArchitecture.NUM_PLAYERS_PER_TEAM
 
 
 class FeaturizerTestTemplate(unittest.TestCase):
@@ -33,6 +35,11 @@ class FeaturizerTestTemplate(unittest.TestCase):
     # default: 16 teams x 8 players
     cls.num_team = len(cls.config.PLAYERS)
     cls.team_size = int(cls.config.PLAYER_N / cls.num_team)
+
+    # xcxc: NUM_TEAMS and NUM_PLAYERS_PER_TEAM are hardcoded.
+    assert cls.num_team == ModelArchitecture.NUM_TEAMS, "NUM_TEAMS must match"
+    assert cls.team_size == ModelArchitecture.NUM_PLAYERS_PER_TEAM,\
+      "NUM_PLAYERS_PER_TEAM must match"
 
     # match the team definition to the default nmmo
     teams = {team_id: [cls.num_team*j+team_id+1 for j in range(cls.team_size)]
