@@ -9,6 +9,7 @@ from nmmo.lib.material import All as Materials
 from nmmo.core.env import Env as TaskEnv
 from nmmo.task.utils import TeamHelper
 from nmmo.task.task_api import Once
+from nmmo.task.predicate import AND, OR, NOT
 
 import task_generator
 from scripted import baselines
@@ -25,13 +26,14 @@ The default args in this script are the ones used to generate the competition ba
 #      want to include any CountEvent?
 
 def generate_task_definitions(n: int=1,
-                   max_clauses=4,
-                   max_clause_size=3,
-                   not_p=0.5,
+                   max_clauses: int=4,
+                   max_clause_size: int=3,
+                   not_p: float=0.5,
                    num_rows: int = 1024,
                    num_cols: int = 1024,):
     """
-    Generate Task definitions by heuristic input/output shaping with RandomTaskGenerator.
+    Generates Task definitions by heuristic input/output shaping with RandomTaskGenerator.
+
 
     Args:
         max_clauses: max clauses in each Task
@@ -75,10 +77,10 @@ def generate_task_definitions(n: int=1,
     #                                 [i for i in range(1, agents_per_team+1)]])
     # gen.add_pred_spec(ScoreHit, [[combat_skills],
     #                              [i for i in range(max_score_hit_n)]])
-    gen.add_pred_spec(HoardGold, [[i for i in range(max_hoard_gold_amount)]])
-    gen.add_pred_spec(EarnGold, [[i for i in range(max_earn_gold_amount)]])
-    gen.add_pred_spec(SpendGold, [[i for i in range(max_spend_gold_amount)]])
-    gen.add_pred_spec(MakeProfit, [[i for i in range(max_profit_amount)]])
+    gen.add_pred_spec(HoardGold, [[i for i in range(1, max_hoard_gold_amount)]])
+    gen.add_pred_spec(EarnGold, [[i for i in range(1, max_earn_gold_amount)]])
+    gen.add_pred_spec(SpendGold, [[i for i in range(1, max_spend_gold_amount)]])
+    gen.add_pred_spec(MakeProfit, [[i for i in range(1, max_profit_amount)]])
 
     task_infos = []
     for _ in range(n):
@@ -109,23 +111,26 @@ def run_tasks(task_infos):
     team_helper = TeamHelper.generate_from_config(config)
 
     def task_assigner(team_helper, task_info):
+        """
+        Takes the generated clause info, instantiates the Predicates, and combines them all using 
+        Conjunctive Normal Form (CNF).
+        """
         task_assignments = []
         for team in team_helper.all_teams():
-            # instantiate
             clauses = []
-            for clause_info in task_info[1:]:
+            for clause_info in task_info:
                 predicates = []
-                for pred_info in clause_info[1:]:
+                for pred_info in clause_info:
+                    # instantiate Predicate
                     pred_class = pred_info[0]
-                    predicate = pred_class(team, *pred_info[1:])
+                    predicate = pred_class(team, *pred_info[2:]) # [2:] contains the params for the pred_class
+                    if pred_info[1]: predicate = NOT(predicate)
                     predicates.append(predicate)
 
-                clause_combiner = clause_info[0]
-                clause = clause_combiner(*predicates)
+                clause = OR(*predicates)
                 clauses.append(clause)
             
-            clauses_combiner = task_info[0]
-            clauses = clauses_combiner(*clauses)
+            clauses = AND(*clauses)
 
             task_assignments.append(Once(team, clauses))
 
