@@ -180,6 +180,15 @@ def score_unique_events(realm, agent_id, score_diff=True):
 
   if score_diff:
     unique_prev = np.unique(log[~curr_idx,attr_to_col['event']:], axis=0)
-    return score - len(unique_prev)
+    score -= len(unique_prev)
+    
+    # reward hack to make agents learn to eat and drink
+    basic_idx = np.in1d(log[curr_idx,attr_to_col['event']],
+                        [EventCode.EAT_FOOD, EventCode.DRINK_WATER])
+    if sum(basic_idx) > 0:
+      score += 1 if realm.tick < 200 else \
+        np.random.choice([0, 1], p=[2/3, 1/3]) # use prob. reward after 200 ticks
+
+    return min(2, score) # clip max score to 2
 
   return score
