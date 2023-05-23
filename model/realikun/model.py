@@ -216,10 +216,11 @@ class InteractionBlock(nn.Module):
     assert torch.any(torch.isnan(h)) == False, "NaN h"
     assert torch.any(torch.isnan(mask)) == False, "NaN mask"
 
-
-
     h = h.view(bs * na, ne, nf).transpose(0, 1)
     h = self.transformer(h, src_key_padding_mask=mask)
+
+    assert torch.any(torch.isnan(h)) == False, "NaN h"
+
     h = h.transpose(0, 1).view(bs, na, ne, nf)
     h = h.max(dim=2)[0]
     return h
