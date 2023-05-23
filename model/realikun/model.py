@@ -212,6 +212,12 @@ class InteractionBlock(nn.Module):
     bs, na, ne, nf = h.shape  # batch_size, num_agent, num_entity, num_feature
     mask = torch.cat([x['team_mask'], x['npc_mask'], x['enemy_mask']], dim=-1)
     mask = mask.to(bool).view(bs * na, ne)
+
+    assert torch.any(torch.isnan(h)) == False, "NaN h"
+    assert torch.any(torch.isnan(mask)) == False, "NaN mask"
+
+
+
     h = h.view(bs * na, ne, nf).transpose(0, 1)
     h = self.transformer(h, src_key_padding_mask=mask)
     h = h.transpose(0, 1).view(bs, na, ne, nf)
