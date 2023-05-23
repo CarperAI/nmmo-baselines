@@ -71,6 +71,12 @@ class BaselinePolicy(pufferlib.models.Policy):
     h_npc = self.npc_net(x, h_self) # (batch_size, num_agents, 9, 256)
     h_enemy = self.enemy_net(x, h_self) # (batch_size, num_agents, 9, 256)
 
+    assert not torch.any(torch.isnan(h_self)), "NaN h_self"
+    assert not torch.any(torch.isnan(h_ally)), "NaN h_ally"
+    assert not torch.any(torch.isnan(h_npc)), "NaN h_npc"
+    assert not torch.any(torch.isnan(h_enemy)), "NaN h_enemy"
+
+
     h_inter = self.interact_net(x, h_self, h_ally, h_npc, h_enemy) # (batch_size, 2048)
 
     self.recurrent_policy.h_self = h_self
