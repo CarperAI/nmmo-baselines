@@ -28,14 +28,13 @@ class PolicyPool():
       self._skill_rating.add_policy(model_path)
 
   def select_policies(self, num_to_select, temperature=1) -> PolicyPoolRecord:
-    if len(self._skill_rating.stats) == 0:
-      return None
-
-    scores = np.array(list(self._skill_rating.stats.values())) / temperature
+    scores = np.array(list(
+      self._skill_rating.stats.get(model, 1) for model in self._policies.keys()
+    )) / temperature
     probs = softmax(scores / max(scores), temperature=1.0)
 
     return np.random.choice(
-      list(self._skill_rating.stats.keys()),
+      list(self._policies.keys()),
       size=num_to_select,
       p=probs)
 
