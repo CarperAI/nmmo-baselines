@@ -78,6 +78,8 @@ class BaselinePolicy(pufferlib.models.Policy):
 
 
     h_inter = self.interact_net(x, h_self, h_ally, h_npc, h_enemy) # (batch_size, 2048)
+    if torch.any(torch.isnan(h_inter)):
+      raise ValueError("NaN h_inter")
 
     self.recurrent_policy.h_self = h_self
     self.recurrent_policy.h_inter = h_inter
@@ -85,9 +87,6 @@ class BaselinePolicy(pufferlib.models.Policy):
 
     batch_size, num_agents, num_features = h_inter.shape
     h_inter = h_inter.view(batch_size, num_agents*num_features)
-
-    if torch.any(torch.isnan(h_inter)):
-      raise ValueError("NaN h_inter")
 
     return h_inter, x["legal"] # (batch_size, num_agents * num_feature)
 

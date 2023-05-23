@@ -223,6 +223,9 @@ class InteractionBlock(nn.Module):
 
     h = h.transpose(0, 1).view(bs, na, ne, nf)
     h = h.max(dim=2)[0]
+
+    assert torch.any(torch.isnan(h)) == False, "NaN h2"
+
     return h
 
 
