@@ -99,7 +99,8 @@ class BaselinePolicy(pufferlib.models.Policy):
     # action ordering fixed. see ModelArchitecture.ACTION_NUM_DIM
     for logits, at in zip(action_logits, lookup.keys()):
       mask = lookup[at]
-      masked_action = logits + (1-mask)*torch.finfo(logits.dtype).min
+      masked_action = torch.where(
+        mask, logits, torch.full_like(logits, torch.finfo(logits.dtype).min))
       for player in range(ModelArchitecture.NUM_PLAYERS_PER_TEAM):
         team_actions.append(masked_action[:, player, :])
 
