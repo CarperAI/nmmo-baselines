@@ -87,9 +87,15 @@ class BaselinePolicy(pufferlib.models.Policy):
 
     # reshape the batch so that we compute actions per-agent
     hidden = hidden.view(-1, 512)
+    if torch.any(torch.isnan(hidden)):
+      raise ValueError("NaN hidden")
+
     action_logits = self.policy_head(hidden)
     if concat:
       action_logits = torch.cat(action_logits, dim=-1)
+
+    if torch.any(torch.isnan(action_logits)):
+      raise ValueError("NaN action_logits")
 
     action_logits = [
       a.view(batch_size, ModelArchitecture.NUM_PLAYERS_PER_TEAM, -1)
