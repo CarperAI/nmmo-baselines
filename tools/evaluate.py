@@ -97,7 +97,8 @@ if __name__ == "__main__":
 
 
   for ri in range(args.num_rounds):
-    models = policy_pool.select_policies(args.num_policies*2)[:args.num_policies]
+    models = list(set(
+       policy_pool.select_policies(args.num_policies*2)[:args.num_policies]))
 
     if len(models) < 2:
        logger.warn("Not enough models to evaluate, skipping round")
@@ -120,14 +121,7 @@ if __name__ == "__main__":
     policy_pool.update_rewards(model_rewards)
     new_ranks = policy_pool._skill_rating.stats
 
-    assignments = []
-    for i, agent in enumerate(agent_rewards.keys()):
-        model = models[i % len(models)]
-        assignments.append((model, agent))
-
-    # Create a DataFrame and print it as a table
-    table = pd.DataFrame(assignments, columns=["Model", "Agent"])
-    table["Agent Reward"] = [agent_rewards[agent] for agent in table["Agent"]]
+    table = pd.DataFrame(models, columns=["Model"])
     table["Model Reward"] = [model_rewards[model] for model in table["Model"]]
     table["Old Rank"] = [old_ranks[model] for model in table["Model"]]
     table["New Rank"] = [new_ranks[model] for model in table["Model"]]
