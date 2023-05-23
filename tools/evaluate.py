@@ -122,12 +122,12 @@ if __name__ == "__main__":
     new_ranks = policy_pool._skill_rating.stats
 
     table = pd.DataFrame(models, columns=["Model"])
-    table["Model Reward"] = [model_rewards[model] for model in table["Model"]]
+    table["Reward"] = [model_rewards[model] for model in table["Model"]]
     table["Old Rank"] = [old_ranks[model] for model in table["Model"]]
     table["New Rank"] = [new_ranks[model] for model in table["Model"]]
     table["Delta"] = [new_ranks[model]-old_ranks[model] for model in table["Model"]]
 
-    table = table.sort_values(by='Model')
+    table = table.sort_values(by='Reward')
     logger.info("\n" + table.to_string(index=False))
 
 
