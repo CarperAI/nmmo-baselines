@@ -80,6 +80,9 @@ class BaselinePolicy(pufferlib.models.Policy):
     batch_size, num_agents, num_features = h_inter.shape
     h_inter = h_inter.view(batch_size, num_agents*num_features)
 
+    if torch.any(torch.isnan(h_inter)):
+      raise ValueError("NaN h_inter")
+
     return h_inter, x["legal"] # (batch_size, num_agents * num_feature)
 
   def decode_actions(self, hidden, lookup, concat=True):
