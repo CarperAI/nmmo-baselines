@@ -52,5 +52,5 @@ class PolicyPool():
     stats = self._skill_rating.stats
     table = pd.DataFrame(self._policies.keys(), columns=["Model"])
     table["Rank"] = [stats[model] for model in table["Model"]]
-    table = table.sort_values(by='Model')
+    table = table.sort_values(by='Rank', ascending=True)
     return table
