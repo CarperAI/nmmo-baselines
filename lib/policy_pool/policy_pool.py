@@ -31,7 +31,8 @@ class PolicyPool():
     scores = np.array(list(
       self._skill_rating.stats.get(model, 1) for model in self._policies.keys()
     )) / temperature
-    probs = softmax(scores / max(scores), temperature=1.0)
+    max = np.max(scores)
+    probs = softmax((max-scores) / max(scores), temperature=1.0)
 
     return np.random.choice(
       list(self._policies.keys()),
