@@ -98,6 +98,10 @@ class BaselinePolicy(pufferlib.models.Policy):
     team_actions = []
     # action ordering fixed. see ModelArchitecture.ACTION_NUM_DIM
     for logits, at in zip(action_logits, lookup.keys()):
+      if torch.any(torch.isnan(logits)):
+        raise ValueError(f"NaN logits for {at}")
+      if torch.any(torch.isnan(lookup[at])):
+        raise ValueError(f"NaN lookup for {at}")
       mask = lookup[at].to(torch.bool)
       masked_action = torch.where(
         mask, logits, torch.full_like(logits, torch.finfo(logits.dtype).min))
