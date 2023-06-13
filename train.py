@@ -292,7 +292,6 @@ if __name__ == "__main__":
     num_cores=args.num_cores or args.num_envs,
     num_buffers=args.num_buffers,
 
-    num_agents=args.num_teams,
     num_steps=args.num_steps,
 
     # PPO
