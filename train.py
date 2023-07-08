@@ -5,6 +5,7 @@ import re
 from ctypes import util
 
 import nmmo
+from nmmo.task.task_api import make_team_tasks
 import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
@@ -198,10 +199,25 @@ if __name__ == "__main__":
   )
 
   def make_env():
-    return nmmo.Env(config)
-    # if args.model_type in ["realikun", "realikun-simplified"]:
-    #   env = NMMOTeamEnv(
-    #     config, team_helper, rewards_config, moves_only=args.moves_only)
+    import pickle as pkl
+    import random
+
+    with open('./pickled_task_with_embs.pkl', 'rb') as f:
+      task_spec = pkl.load(f)
+
+    teams = team_helper.teams
+
+    task_spec_sampled = random.sample(task_spec, len(teams))
+    tasks = make_team_tasks(teams, task_spec_sampled)
+    make_task_fn = lambda: tasks
+
+    env =  nmmo.Env(config)
+    class MyNMMO(nmmo.Env):
+      def reset(self, *args, **kwargs):
+        return self.reset(*args, make_task_fn=make_task_fn, **kwargs)
+    env = MyNMMO(env)
+
+    return env
 
   binding = pufferlib.emulation.Binding(
     env_creator=make_env,
