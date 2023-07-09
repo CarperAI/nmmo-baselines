@@ -5,10 +5,10 @@ import re
 from ctypes import util
 
 import nmmo
-from nmmo.task.task_api import make_team_tasks
 import pufferlib.emulation
 import pufferlib.frameworks.cleanrl
 import pufferlib.registry.nmmo
+from nmmo.task.task_api import make_team_tasks
 import torch
 
 import clean_pufferl
@@ -19,6 +19,7 @@ from lib.agent.baseline_agent import BaselineAgent
 from lib.policy_pool.json_policy_pool import JsonPolicyPool
 from lib.policy_pool.policy_pool import PolicyPool
 from lib.team.team_helper import TeamHelper
+from pettingzoo.utils.env import AgentID, ParallelEnv
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
@@ -31,7 +32,7 @@ if __name__ == "__main__":
     help="path to model to load (default: None)")
   parser.add_argument(
     "--model.type",
-    dest="model_type", type=str, default="realikun",
+    dest="model_type", type=str, default="basic",
     help="model type (default: realikun)")
 
   parser.add_argument(
@@ -47,7 +48,7 @@ if __name__ == "__main__":
     "--env.num_learners", dest="num_learners", type=int, default=16,
     help="number of agents running he learner policy (default: 16)")
   parser.add_argument(
-    "--env.max_episode_length", dest="max_episode_length", type=int, default=1024,
+    "--env.max_episode_length", dest="max_episode_length", type=int, default=128,
     help="number of steps per episode (default: 1024)")
   parser.add_argument(
     "--env.death_fog_tick", dest="death_fog_tick", type=int, default=None,
@@ -61,7 +62,7 @@ if __name__ == "__main__":
     action="store_true", default=False,
     help="reset on death (default: False)")
   parser.add_argument(
-    "--env.num_maps", dest="num_maps", type=int, default=128,
+    "--env.num_maps", dest="num_maps", type=int, default=10,
     help="number of maps to use for training (default: 1)")
   parser.add_argument(
     "--env.maps_path", dest="maps_path", type=str, default="maps/train/",
@@ -103,7 +104,7 @@ if __name__ == "__main__":
     "--rollout.num_envs", dest="num_envs", type=int, default=4,
     help="number of environments to use for training (default: 1)")
   parser.add_argument(
-    "--rollout.num_buffers", dest="num_buffers", type=int, default=4,
+    "--rollout.num_buffers", dest="num_buffers", type=int, default=1,
     help="number of buffers to use for training (default: 4)")
   parser.add_argument(
     "--rollout.batch_size", dest="rollout_batch_size", type=int, default=2**14,
@@ -141,7 +142,7 @@ if __name__ == "__main__":
       help="wandb entity name (default: None)")
 
   parser.add_argument(
-    "--ppo.bptt_horizon", dest="bptt_horizon", type=int, default=8,
+    "--ppo.bptt_horizon", dest="bptt_horizon", type=int, default=4,
     help="train on bptt_horizon steps of a rollout at a time. "
      "use this to reduce GPU memory (default: 16)")
 
@@ -151,7 +152,7 @@ if __name__ == "__main__":
     help="number of rows in a training batch (default: 32)")
   parser.add_argument(
     "--ppo.update_epochs",
-    dest="ppo_update_epochs", type=int, default=4,
+    dest="ppo_update_epochs", type=int, default=1,
     help="number of update epochs to use for training (default: 4)")
   parser.add_argument(
     "--ppo.learning_rate", dest="ppo_learning_rate",
@@ -200,24 +201,39 @@ if __name__ == "__main__":
 
   def make_env():
     import pickle as pkl
+    import numpy as np
     import random
 
+    import os
+    print('cwd', os.getcwd())
     with open('./pickled_task_with_embs.pkl', 'rb') as f:
       task_spec = pkl.load(f)
 
+    # tasks = [d[1] for d in task_spec]
+    num_tasks = len(task_spec)
     teams = team_helper.teams
+    single_task = task_spec[0]
 
+    # make_task_fn = lambda: tasks
+    # task_spec_sampled =np.random.choice(task_spec, size=len(teams), replace=False)
     task_spec_sampled = random.sample(task_spec, len(teams))
     tasks = make_team_tasks(teams, task_spec_sampled)
     make_task_fn = lambda: tasks
 
     env =  nmmo.Env(config)
     class MyNMMO(nmmo.Env):
+      def __init__(self, env):
+        super().__init__()
+        self.env = env
+
       def reset(self, *args, **kwargs):
-        return self.reset(*args, make_task_fn=make_task_fn, **kwargs)
+        return self.env.reset(*args, make_task_fn=make_task_fn, **kwargs)
     env = MyNMMO(env)
 
     return env
+    # if args.model_type in ["realikun", "realikun-simplified"]:
+    #   env = NMMOTeamEnv(
+    #     config, team_helper, rewards_config, moves_only=args.moves_only)
 
   binding = pufferlib.emulation.Binding(
     env_creator=make_env,
