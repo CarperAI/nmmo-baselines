@@ -48,7 +48,7 @@ if __name__ == "__main__":
     "--env.num_learners", dest="num_learners", type=int, default=16,
     help="number of agents running he learner policy (default: 16)")
   parser.add_argument(
-    "--env.max_episode_length", dest="max_episode_length", type=int, default=128,
+    "--env.max_episode_length", dest="max_episode_length", type=int, default=1024,
     help="number of steps per episode (default: 1024)")
   parser.add_argument(
     "--env.death_fog_tick", dest="death_fog_tick", type=int, default=None,
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     action="store_true", default=False,
     help="reset on death (default: False)")
   parser.add_argument(
-    "--env.num_maps", dest="num_maps", type=int, default=10,
+    "--env.num_maps", dest="num_maps", type=int, default=1,
     help="number of maps to use for training (default: 1)")
   parser.add_argument(
     "--env.maps_path", dest="maps_path", type=str, default="maps/train/",
@@ -101,10 +101,10 @@ if __name__ == "__main__":
     "--rollout.num_cores", dest="num_cores", type=int, default=None,
       help="number of cores to use for training (default: num_envs)")
   parser.add_argument(
-    "--rollout.num_envs", dest="num_envs", type=int, default=4,
+    "--rollout.num_envs", dest="num_envs", type=int, default=1,
     help="number of environments to use for training (default: 1)")
   parser.add_argument(
-    "--rollout.num_buffers", dest="num_buffers", type=int, default=1,
+    "--rollout.num_buffers", dest="num_buffers", type=int, default=4,
     help="number of buffers to use for training (default: 4)")
   parser.add_argument(
     "--rollout.batch_size", dest="rollout_batch_size", type=int, default=2**14,
@@ -142,7 +142,7 @@ if __name__ == "__main__":
       help="wandb entity name (default: None)")
 
   parser.add_argument(
-    "--ppo.bptt_horizon", dest="bptt_horizon", type=int, default=4,
+    "--ppo.bptt_horizon", dest="bptt_horizon", type=int, default=16,
     help="train on bptt_horizon steps of a rollout at a time. "
      "use this to reduce GPU memory (default: 16)")
 
@@ -152,7 +152,7 @@ if __name__ == "__main__":
     help="number of rows in a training batch (default: 32)")
   parser.add_argument(
     "--ppo.update_epochs",
-    dest="ppo_update_epochs", type=int, default=1,
+    dest="ppo_update_epochs", type=int, default=4,
     help="number of update epochs to use for training (default: 4)")
   parser.add_argument(
     "--ppo.learning_rate", dest="ppo_learning_rate",
