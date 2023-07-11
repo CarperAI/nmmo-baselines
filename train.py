@@ -31,7 +31,7 @@ if __name__ == "__main__":
     help="path to model to load (default: None)")
   parser.add_argument(
     "--model.type",
-    dest="model_type", type=str, default="basic",
+    dest="model_type", type=str, default="realikun",
     help="model type (default: realikun)")
 
   parser.add_argument(
@@ -61,8 +61,8 @@ if __name__ == "__main__":
     action="store_true", default=False,
     help="reset on death (default: False)")
   parser.add_argument(
-    "--env.num_maps", dest="num_maps", type=int, default=1,
-    help="number of maps to use for training (default: 1)")
+    "--env.num_maps", dest="num_maps", type=int, default=128,
+    help="number of maps to use for training (default: 128)")
   parser.add_argument(
     "--env.maps_path", dest="maps_path", type=str, default="maps/train/",
     help="path to maps to use for training (default: None)")
@@ -100,8 +100,8 @@ if __name__ == "__main__":
     "--rollout.num_cores", dest="num_cores", type=int, default=None,
       help="number of cores to use for training (default: num_envs)")
   parser.add_argument(
-    "--rollout.num_envs", dest="num_envs", type=int, default=1,
-    help="number of environments to use for training (default: 1)")
+    "--rollout.num_envs", dest="num_envs", type=int, default=4,
+    help="number of environments to use for training (default: 4)")
   parser.add_argument(
     "--rollout.num_buffers", dest="num_buffers", type=int, default=4,
     help="number of buffers to use for training (default: 4)")
@@ -141,9 +141,9 @@ if __name__ == "__main__":
       help="wandb entity name (default: None)")
 
   parser.add_argument(
-    "--ppo.bptt_horizon", dest="bptt_horizon", type=int, default=16,
+    "--ppo.bptt_horizon", dest="bptt_horizon", type=int, default=8,
     help="train on bptt_horizon steps of a rollout at a time. "
-     "use this to reduce GPU memory (default: 16)")
+     "use this to reduce GPU memory (default: 8)")
 
   parser.add_argument(
     "--ppo.training_batch_size",
@@ -220,14 +220,14 @@ if __name__ == "__main__":
     make_task_fn = lambda: tasks
     
     # env =  nmmo.Env(config)
-    class MyNMMO(nmmo.Env):
+    class NMMOTaskWrapper(nmmo.Env):
       def __init__(self, config):
         super().__init__(config)
 
       def reset(self, *args, **kwargs):
         return super().reset(*args, make_task_fn=make_task_fn, **kwargs)
 
-    env = MyNMMO(config)
+    env = NMMOTaskWrapper(config)
 
     return env
     # if args.model_type in ["realikun", "realikun-simplified"]:
