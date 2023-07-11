@@ -19,7 +19,6 @@ from lib.agent.baseline_agent import BaselineAgent
 from lib.policy_pool.json_policy_pool import JsonPolicyPool
 from lib.policy_pool.policy_pool import PolicyPool
 from lib.team.team_helper import TeamHelper
-from pettingzoo.utils.env import AgentID, ParallelEnv
 
 if __name__ == "__main__":
   logging.basicConfig(level=logging.INFO)
@@ -219,16 +218,16 @@ if __name__ == "__main__":
     task_spec_sampled = random.sample(task_spec, len(teams))
     tasks = make_team_tasks(teams, task_spec_sampled)
     make_task_fn = lambda: tasks
-
-    env =  nmmo.Env(config)
+    
+    # env =  nmmo.Env(config)
     class MyNMMO(nmmo.Env):
-      def __init__(self, env):
-        super().__init__()
-        self.env = env
+      def __init__(self, config):
+        super().__init__(config)
 
       def reset(self, *args, **kwargs):
-        return self.env.reset(*args, make_task_fn=make_task_fn, **kwargs)
-    env = MyNMMO(env)
+        return super().reset(*args, make_task_fn=make_task_fn, **kwargs)
+
+    env = MyNMMO(config)
 
     return env
     # if args.model_type in ["realikun", "realikun-simplified"]:
