@@ -9,6 +9,8 @@ from lib.agent.agent import Agent
 from lib.agent.util import load_matching_state_dict
 from model.basic.policy import BasicPolicy
 from model.basic_teams.policy import BasicTeamsPolicy
+from model.basic_lm.policy import BasicPolicyWithLM
+from model.deep_goat.policy import DeepGoatPolicy
 from model.improved.policy import ImprovedPolicy
 from model.random.policy import RandomPolicy
 from model.realikun.policy import RealikunPolicy
@@ -111,6 +113,8 @@ class BaselineAgent(Agent):
       return RandomPolicy.create_policy()
     elif model_type == "basic":
       return BasicPolicy.create_policy(num_lstm_layers=0)
+    elif model_type == "basic_lm":
+      return BasicPolicyWithLM.create_policy(num_lstm_layers=0)
     elif model_type == "basic-lstm":
       return BasicPolicy.create_policy(num_lstm_layers=1)
     elif model_type == "improved":
@@ -121,5 +125,7 @@ class BaselineAgent(Agent):
       return BasicTeamsPolicy.create_policy(num_lstm_layers=0)
     elif model_type == "basic-teams-lstm":
       return BasicTeamsPolicy.create_policy(num_lstm_layers=0)
+    elif model_type == "deep-goat":
+      return DeepGoatPolicy.create_policy(num_lstm_layers=0)
     else:
       raise ValueError(f"Unsupported model type: {model_type}")
