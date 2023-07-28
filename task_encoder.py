@@ -126,3 +126,9 @@ class TaskEncoder:
             os.replace(self.temp_file_path, save_to_file)
 
         return task_spec
+
+    def close(self):
+        del self.model
+        del self.tokenizer
+        torch.cuda.empty_cache()
+        del self

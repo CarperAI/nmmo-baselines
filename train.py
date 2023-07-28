@@ -1,5 +1,6 @@
 import os
 import logging
+
 import environment
 import policy
 import config
@@ -63,12 +64,15 @@ def reinforcement_learning_track(trainer, args):
             batch_rows=args.ppo_training_batch_size // args.bptt_horizon,
         )
 
+# TODO: run elm once to generate new tasks, then run reinforcement learning
 def curriculum_generation_track(trainer, args, use_elm=True):
     from elm import OpenELMTaskGenerator, RandomTaskGenerator
+    # NOTE: RandomTaskGenerator is just a random task sampler. Replace it with your own.
     task_generator = OpenELMTaskGenerator(CURRICULUM.task_spec, LLM_CHECKPOINT) if use_elm else RandomTaskGenerator(CURRICULUM.task_spec)
     train_task_spec = task_generator.generate_tasks(NUM_TRAIN_TASKS)
     task_encoder = TaskEncoder(LLM_CHECKPOINT, CURRICULUM, batch_size=2)
     task_encoder.get_task_embedding(train_task_spec, save_to_file=CURRICULUM_FILE_PATH)
+    task_encoder.close()
     # @daveey: We need a baseline checkpoint for this
     #load_agent_model(AGENT_MODEL_PATH)
     for epoch in range(30):
@@ -82,10 +86,17 @@ def curriculum_generation_track(trainer, args, use_elm=True):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
+    # Load the curriculum and create the embedding, adjust batch_size to fit your GPU
+    # This curriculum is used in the reinforcement learning track
+    task_encoder = TaskEncoder(LLM_CHECKPOINT, CURRICULUM, batch_size=2)
+    task_encoder.get_task_embedding(CURRICULUM.task_spec, save_to_file=CURRICULUM_FILE_PATH)
+    task_encoder.close() # to free up gpu memory
+
     # Create a local config for testing that won't OOM your machine
     # You can either edit the defaults in config.py or set args
     # from the commandline.
     args = config.create_config(config.LocalConfig)
+    args.tasks_path = CURRICULUM_FILE_PATH
     trainer = setup_env(args)
 
     # Uncomment the following line to run reinforcement learning track
