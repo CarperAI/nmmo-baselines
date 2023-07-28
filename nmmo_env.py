@@ -74,6 +74,12 @@ def add_args(parser: ArgumentParser):
       default=None,
       help="path to save replay files (default: auto-generated)",
   )
+  parser.add_argument(
+    "--env.force_actions",
+    dest="force_actions",
+    action="store_true",
+    help="don't provide noop action targets"
+  )
 
 class Config(
     nmmo.config.Medium,
@@ -91,7 +97,7 @@ class Config(
     super().__init__()
 
     self.PROVIDE_ACTION_TARGETS = True
-    self.PROVIDE_NOOP_ACTION_TARGET = True
+    self.PROVIDE_NOOP_ACTION_TARGET = not args.force_actions
     self.MAP_FORCE_GENERATION = False
     self.PLAYER_N = args.num_agents
     self.HORIZON = args.max_episode_length
