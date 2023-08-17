@@ -408,7 +408,6 @@ class OpenELMTaskGenerator(LearnableTaskSampler):
         self.config.env = NMMOConfig()
         self.config.env.impr = import_str["short_import"]
         self.config.env.init_prompt = self.task_spec_to_str(task_spec)
-        self.config.env.mutate = True
         self.config.env.batch_size = batch_size
         self.gen_fn_name = gen_fn_name
         self.config.env.gen_fn_name = gen_fn_name
@@ -437,10 +436,16 @@ class OpenELMTaskGenerator(LearnableTaskSampler):
         )
 
     def evolve_tasks(
-        self, task_spec: List[ts.TaskSpec], num_tasks, steps=10, debug=False
+        self, task_spec: List[ts.TaskSpec], num_tasks, steps=10, expected_diversity=20, debug=False
     ) -> List[ts.TaskSpec]:
         """Evolve the given task specs for the given number of steps
         and return the num_tasks task specs
+
+        Args:
+            task_spec: The task specs to evolve.
+            num_tasks: The number of task specs to return.
+            steps: The number of steps ELM runs for.
+            expected_diversity: The expected number of unique tasks to generate.
         """
         if debug:  # just to check if the end-to-end works
             return self.sample_tasks(num_tasks)
@@ -449,13 +454,16 @@ class OpenELMTaskGenerator(LearnableTaskSampler):
         self.config.env.init_prompt = self.task_spec_to_str(task_spec)
         elm = ELM(self.config, env=NMMOEnvironment)
 
-        best_task = None
-        while best_task is None:
+        niches_filled = None
+        while niches_filled < expected_diversity:
             elm.run(init_steps=2, total_steps=steps)
             # for now, just using the maximum fitness genome
             # TODO: we may want to sample best ones across the MAP (see MAP-Elites)
             # TODO: vary the name of generated functions. Now, it's all training_task (self.gen_fn_name)
             best_task = elm.qd_algorithm.current_max_genome
+            niches_filled = elm.qd_algorithm.niches_filled
+            breakpoint()
+            all_tasks = elm.qd_algorithm.genomes
 
         return best_task.generate_task_spec(num_tasks)
 
