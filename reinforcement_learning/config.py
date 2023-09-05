@@ -52,6 +52,7 @@ class Config:
     heal_bonus_weight = 0.03
     meander_bonus_weight = 0.02
     explore_bonus_weight = 0.01
+    focus_skill_weight = 0.004  # 500 xp -> score of 2
     spawn_immunity = 20
 
     # Policy Args

@@ -11,6 +11,7 @@ import nmmo
 from nmmo.entity.entity import EntityState
 
 EntityId = EntityState.State.attr_name_to_col["id"]
+NUM_SKILL = 8
 
 
 class Random(pufferlib.models.Policy):
@@ -35,9 +36,12 @@ class Random(pufferlib.models.Policy):
 
 
 class Baseline(pufferlib.models.Policy):
-  def __init__(self, envs, input_size, hidden_size, task_size):
+  def __init__(self, envs, input_size, hidden_size, task_size, focus_skill=False):
     super().__init__()
     self.envs = envs
+    self.focus_skill = focus_skill
+    # use one-hot encoding for focus skill
+    task_size = task_size + NUM_SKILL if focus_skill else task_size
 
     self.tile_encoder = TileEncoder(input_size)
     self.player_encoder = PlayerEncoder(input_size, hidden_size)
@@ -62,7 +66,18 @@ class Baseline(pufferlib.models.Policy):
     market_embeddings = self.item_encoder(env_outputs["Market"])
     market = self.market_encoder(market_embeddings)
 
-    task = self.task_encoder(env_outputs["Task"])
+    task_embeddings = env_outputs["Task"]
+    if self.focus_skill:
+        if "WFocusSkill" in env_outputs:
+          focus_one_hot = torch.nn.functional.one_hot(
+              env_outputs["WFocusSkill"].to(dtype=torch.long).flatten(),
+              num_classes = NUM_SKILL
+          )
+          task_embeddings = torch.cat([focus_one_hot, task_embeddings], dim=-1)
+        else:
+          task_embeddings = torch.cat([torch.zeros_like(task_embeddings[:, :NUM_SKILL]),
+                                       task_embeddings], dim=-1)
+    task = self.task_encoder(task_embeddings)
 
     obs = torch.cat([tile, my_agent, inventory, market, task], dim=-1)
     obs = self.proj_fc(obs)

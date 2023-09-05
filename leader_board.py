@@ -4,6 +4,7 @@ from collections import defaultdict, Counter
 
 import math
 import numpy as np
+import gym.spaces
 
 import pufferlib
 import pufferlib.emulation
@@ -106,6 +107,27 @@ def get_episode_result(realm: Realm, agent_id):
     return result, achieved, performed, event_cnt
 
 
+# We can use the following mapping from task name (skill/item name as arg) to profession
+TASK_TO_SKILL_MAP = {
+    ":melee_": "melee",
+    ":spear_": "melee",
+    ":range_": "range",
+    ":bow_": "range",
+    ":mage_": "mage",
+    ":wand_": "mage",
+    ":fishing_": "fishing",
+    ":rod_": "fishing",
+    ":herbalism_": "herbalism",
+    ":gloves_": "herbalism",
+    ":prospecting_": "prospecting",
+    ":pickaxe_": "prospecting",
+    ":carving_": "carving",
+    ":axe_": "carving",
+    ":alchemy_": "alchemy",
+    ":chisel_": "alchemy",
+}
+SKILL_LIST = sorted(list(set(skill for skill in TASK_TO_SKILL_MAP.values())))
+
 class StatPostprocessor(pufferlib.emulation.Postprocessor):
     """Postprocessing actions and metrics of Neural MMO.
        Process wandb/leader board stats, and save replays.
@@ -113,9 +135,23 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
     def __init__(self, env, agent_id):
         super().__init__(env, is_multiagent=True, agent_id=agent_id)
         self._reset_episode_stats()
+        self._focus_skill = None
 
     def reset(self, observation):
         self._reset_episode_stats()
+        task_name = self.env.agent_task_map[self.agent_id][0].name
+        self._focus_skill = self._choose_focus_skill(task_name)
+        self._focus_skill_idx = SKILL_LIST.index(self._focus_skill)
+
+    @staticmethod
+    def _choose_focus_skill(task_name):
+        task_name = task_name.lower()
+        # if task_name contains specific skill or item, choose the corresponding skill
+        for hint, skill in TASK_TO_SKILL_MAP.items():
+            if hint in task_name:
+                return skill
+        # otherwise, chooose randomly
+        return np.random.choice(SKILL_LIST)
 
     def _reset_episode_stats(self):
         self.epoch_return = 0
@@ -130,8 +166,6 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._curriculum = defaultdict(list)
         self._combat_level = []
         self._harvest_level = []
-        self._prev_unique_count = 0
-        self._curr_unique_count = 0
 
         # for agent results
         self._time_alive = 0
@@ -151,6 +185,10 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         # saving actions for masking/scoring
         self._last_moves = []
         self._last_price = 0
+        self._prev_unique_count = 0
+        self._curr_unique_count = 0
+        self._prev_skill_exp = 0
+        self._curr_skill_exp = 0
 
     def _update_stats(self, agent):
         task = self.env.agent_task_map[agent.ent_id][0]
@@ -194,7 +232,18 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._carving_level += agent.carving_level.val
         self._alchemy_level += agent.alchemy_level.val
 
+    @property
+    def observation_space(self):
+        obs_space = super().observation_space
+        # Added W to the front to make it last in the obs space dict, which is sorted by key
+        # NOTE: pufferlib unbatched obs did not process the newly added obs correctly,
+        #   if the new key was not the alphabetically last one in the dict
+        obs_space["WFocusSkill"] = gym.spaces.Discrete(len(SKILL_LIST))
+        return obs_space
+
     def observation(self, observation):
+        # replace the task embedding with the focus skill
+        observation["WFocusSkill"] = self._focus_skill_idx
         # Mask out the last selected price
         observation["ActionTargets"]["Sell"]["Price"][self._last_price] = 0
         return observation
@@ -206,7 +255,6 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
 
     def reward_done_info(self, reward, done, info):
         """Update stats + info and save replays."""
-
         # Remove the task from info. Curriculum info is processed in _update_stats()
         info.pop('task', None)
 
@@ -218,6 +266,12 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         if not done:
             self.epoch_length += 1
             self.epoch_return += reward
+
+            # Store the previous and current exp of the focus skill
+            self._prev_skill_exp = self._curr_skill_exp
+            self._curr_skill_exp = getattr(self.env.realm.players[self.agent_id],
+                                           self._focus_skill + "_exp").val
+
             return reward, done, info
 
         if 'stats' not in info:

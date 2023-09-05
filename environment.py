@@ -39,6 +39,7 @@ class Postprocessor(StatPostprocessor):
       meander_bonus_weight=0,
       explore_bonus_weight=0,
       clip_unique_event=3,
+      focus_skill_weight=0,
     ):
         super().__init__(env, agent_id)
         self.early_stop_agent_num = early_stop_agent_num
@@ -47,6 +48,7 @@ class Postprocessor(StatPostprocessor):
         self.meander_bonus_weight = meander_bonus_weight
         self.explore_bonus_weight = explore_bonus_weight
         self.clip_unique_event = clip_unique_event
+        self.focus_skill_weight = focus_skill_weight
 
     def reset(self, obs):
         '''Called at the start of each episode'''
@@ -92,7 +94,7 @@ class Postprocessor(StatPostprocessor):
         # Add meandering bonus to encourage moving to various directions
         meander_bonus = 0
         if len(self._last_moves) > 5:
-          move_entropy = calculate_entropy(self._last_moves[-8:])  # of last 8 moves
+          move_entropy = calculate_entropy(self._last_moves[-8:])  # of last 8 moves = ppo.bptt_horizon
           meander_bonus = self.meander_bonus_weight * (move_entropy - 1)
 
         # Unique event-based rewards, similar to exploration bonus
@@ -104,7 +106,10 @@ class Postprocessor(StatPostprocessor):
                                 self._curr_unique_count - self._prev_unique_count)
         explore_bonus *= self.explore_bonus_weight
 
-        reward = reward + explore_bonus + healing_bonus + meander_bonus
+        # Focus-skill bonus
+        focus_skill_bonus = self.focus_skill_weight * (self._curr_skill_exp - self._prev_skill_exp)
+
+        reward = reward + explore_bonus + healing_bonus + meander_bonus + focus_skill_bonus
 
         return reward, done, info
 
@@ -122,6 +127,7 @@ def make_env_creator(args: Namespace):
                 'heal_bonus_weight': args.heal_bonus_weight,
                 'meander_bonus_weight': args.meander_bonus_weight,
                 'explore_bonus_weight': args.explore_bonus_weight,
+                'focus_skill_weight': args.focus_skill_weight,
             },
         )
         return env

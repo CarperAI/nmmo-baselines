@@ -34,7 +34,8 @@ def setup_env(args):
             envs,
             input_size=args.input_size,
             hidden_size=args.hidden_size,
-            task_size=args.task_size
+            task_size=args.task_size,
+            focus_skill=args.focus_skill_weight > 0,
         )
         return cleanrl.Policy(learner_policy)
 
