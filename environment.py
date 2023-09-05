@@ -25,7 +25,10 @@ class Config(nmmo.config.Default):
         self.NPC_N = args.num_npcs
         self.CURRICULUM_FILE_PATH = args.tasks_path
         self.TASK_EMBED_DIM = args.task_size
+        # Making the env "easier" so that agents can learn faster
         self.RESOURCE_RESILIENT_POPULATION = args.resilient_population
+        self.RESOURCE_STARVATION_RATE = args.resource_depletion_damage
+        self.RESOURCE_DEHYDRATION_RATE = args.resource_depletion_damage
 
         self.COMMUNICATION_SYSTEM_ENABLED = False
 

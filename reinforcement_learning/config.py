@@ -46,6 +46,7 @@ class Config:
     maps_path = "maps/train/"  # Path to maps to use for training
     map_size = 128  # Size of maps to use for training
     resilient_population = 0.2  # Percentage of agents to be resilient to starvation/dehydration
+    resource_depletion_damage = 6  # Damage per tick from starvation/dehydration
     tasks_path = None  # Path to tasks to use for training
     early_stop_agent_num = 8  # Stop the episode when the number of agents reaches this number
     sqrt_achievement_rewards=False # Use the log of achievement rewards
