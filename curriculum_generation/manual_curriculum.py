@@ -244,7 +244,7 @@ for item in EQUIP_ITEM:
         TaskSpec(
             eval_fn=EquipItem,
             eval_fn_kwargs={"item": item, "level": level, "num_agent": 1},
-            sampling_weight=4 - level if level < 4 else 1,
+            sampling_weight=10*(4 - level) if level < 4 else 1,
         )
     )
 
@@ -262,7 +262,7 @@ for item in c.consumables:
                     "level": level,
                     "quantity": quantity,
                 },
-                sampling_weight=4 - level if level < 4 else 1,
+                sampling_weight=5*(4 - level) if level < 4 else 1,
             )
         )
 
@@ -280,7 +280,7 @@ for item in HARVEST_ITEM:
                     "level": level,
                     "quantity": quantity,
                 },
-                sampling_weight=4 - level if level < 4 else 1,
+                sampling_weight=10*(4 - level) if level < 4 else 1,
             )
         )
 

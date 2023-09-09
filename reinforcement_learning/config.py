@@ -50,6 +50,7 @@ class Config:
     resilient_population = 0.2  # Percentage of agents to be resilient to starvation/dehydration
     tasks_path = None  # Path to tasks to use for training
     eval_mode = False # Run the postprocessor in the eval mode
+    detailed_stat = False # Run the postprocessor in the detailed stat mode, which sends a lot to wandb
     early_stop_agent_num = 8  # Stop the episode when the number of agents reaches this number
     sqrt_achievement_rewards=False # Use the log of achievement rewards
     heal_bonus_weight = 0.03

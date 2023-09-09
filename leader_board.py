@@ -88,8 +88,8 @@ class TeamResult:
             "alchemy_level",
         ]
 
-def get_episode_result(realm: Realm, agent_id):
-    achieved, performed, event_cnt = process_event_log(realm, [agent_id])
+def get_episode_result(realm: Realm, agent_id, detailed_stat=False):
+    achieved, performed, event_cnt = process_event_log(realm, [agent_id], detailed_stat)
     # NOTE: Not actually a "team" result. Just a "team" of one agent
     result = TeamResult(
         policy_id = str(agent_id),  # TODO: put actual team/policy name here
@@ -112,9 +112,10 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
     """Postprocessing actions and metrics of Neural MMO.
        Process wandb/leader board stats, and save replays.
     """
-    def __init__(self, env, agent_id, eval_mode=False):
+    def __init__(self, env, agent_id, eval_mode=False, detailed_stat=False):
         super().__init__(env, is_multiagent=True, agent_id=agent_id)
         self.eval_mode = eval_mode
+        self.detailed_stat = detailed_stat
         self._reset_episode_stats()
 
     def reset(self, observation):
@@ -247,9 +248,11 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         info["stats"]["achieved/max_harvest_level"] = max(self._harvest_level)
         info["stats"]["achieved/team_time_alive"] = self._time_alive
         info["stats"]["achieved/unique_events"] = self._curr_unique_count
+        if self.detailed_stat:
+            info["stats"]["skill"] = get_skill_stat(agent)
         info["curriculum"] = self._curriculum
 
-        result, achieved, performed, _ = get_episode_result(self.env.realm, self.agent_id)
+        result, achieved, performed, _ = get_episode_result(self.env.realm, self.agent_id, self.detailed_stat)
         for key, val in list(achieved.items()) + list(performed.items()):
             info["stats"][key] = float(val)
 
@@ -278,7 +281,23 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
             # "return" is used for ranking in the eval mode, so put the task progress here
             info["return"] = self._max_task_progress  # this is 1 if done
 
+        if self.detailed_stat and self.is_env_done():
+            info["stats"].update(get_market_stat(self.env.realm))
+
         return reward, done, info
+
+    def is_env_done(self):
+        # Trigger only when the episode is done, and has the lowest agent id in agents
+        if self.agent_id > min(self.env.agents):
+            return False
+        if len(self.env.agents) <= self.early_stop_agent_num:  # early stop
+            return True
+        if self.env.realm.tick >= self.env.config.HORIZON:  # reached the end
+            return True
+        for player_id in self.env.agents:  # any alive agents?
+            if player_id in self.env.realm.players:
+                return False
+        return True
 
 # Event processing utilities for Neural MMO.
 
@@ -298,18 +317,19 @@ KEY_EVENT = [
     "harvest_item",
     "list_item",
     "buy_item",
+    "fire_ammo",
 ]
 
 ITEM_TYPE = {
-    "armor": [item.ITEM_TYPE_ID for item in [Item.Hat, Item.Top, Item.Bottom]],
-    "weapon": [item.ITEM_TYPE_ID for item in [Item.Spear, Item.Bow, Item.Wand]],
-    "tool": [item.ITEM_TYPE_ID for item in \
-             [Item.Axe, Item.Gloves, Item.Rod, Item.Pickaxe, Item.Chisel]],
-    "ammo": [item.ITEM_TYPE_ID for item in [Item.Runes, Item.Arrow, Item.Whetstone]],
-    "consumable": [item.ITEM_TYPE_ID for item in [Item.Potion, Item.Ration]],
+    "all_item": [item.ITEM_TYPE_ID for item in Item.ALL_ITEM],
+    "armor": [item.ITEM_TYPE_ID for item in Item.ARMOR],
+    "weapon": [item.ITEM_TYPE_ID for item in Item.WEAPON],
+    "tool": [item.ITEM_TYPE_ID for item in Item.TOOL],
+    "ammo": [item.ITEM_TYPE_ID for item in Item.AMMUNITION],
+    "consumable": [item.ITEM_TYPE_ID for item in Item.CONSUMABLE],
 }
 
-def process_event_log(realm, agent_list):
+def process_event_log(realm, agent_list, detailed_stat=False, level_crit=3):
     """Process the event log and extract performed actions and achievements."""
     log = realm.event_log.get_data(agents=agent_list)
     attr_to_col = realm.event_log.attr_to_col
@@ -328,7 +348,7 @@ def process_event_log(realm, agent_list):
 
     # check if tools, weapons, ammos, ammos were equipped
     for item_type, item_ids in ITEM_TYPE.items():
-        if item_type == "consumable":
+        if item_type in ["all_item", "consumable"]:
             continue
         key = "event/equip_" + item_type
         idx = (log[:, attr_to_col["event"]] == EventCode.EQUIP_ITEM) & \
@@ -339,6 +359,12 @@ def process_event_log(realm, agent_list):
     key = "event/harvest_weapon"
     idx = (log[:, attr_to_col["event"]] == EventCode.HARVEST_ITEM) & \
           np.in1d(log[:, attr_to_col["item_type"]], ITEM_TYPE["weapon"])
+    performed[key] = sum(idx) > 0
+
+    key = "event/kill_level3_npc"
+    idx = (log[:, attr_to_col["event"]] == EventCode.PLAYER_KILL) & \
+          (log[:, attr_to_col["target_ent"]] < 0) & \
+          (log[:, attr_to_col["level"]] >= level_crit)
     performed[key] = sum(idx) > 0
 
     # record important achievements
@@ -361,15 +387,43 @@ def process_event_log(realm, agent_list):
     idx = np.in1d(log[:, attr_to_col["event"]],
                   [EventCode.HARVEST_ITEM, EventCode.LOOT_ITEM, EventCode.BUY_ITEM])
     if sum(idx) > 0:
-      for item_type, item_ids in ITEM_TYPE.items():
-          idx_item = np.in1d(log[idx, attr_to_col["item_type"]], item_ids)
-          achieved["achieved/max_" + item_type + "_level"] = \
-            int(max(log[idx][idx_item, attr_to_col["level"]])) if sum(idx_item) > 0 else 1  # min level = 1
+        for item_type, item_ids in ITEM_TYPE.items():
+            if item_type == "all_item":
+                continue
+            idx_item = np.in1d(log[:, attr_to_col["item_type"]], item_ids)
+            achieved["achieved/max_" + item_type + "_level"] = \
+              int(max(log[idx & idx_item, attr_to_col["level"]])) if sum(idx & idx_item) > 0 else 1  # min level = 1
 
     # other notable achievements
     idx = (log[:, attr_to_col["event"]] == EventCode.PLAYER_KILL)
     achieved["achieved/agent_kill_count"] = int(sum(idx & (log[:, attr_to_col["target_ent"]] > 0)))
     achieved["achieved/npc_kill_count"] = int(sum(idx & (log[:, attr_to_col["target_ent"]] < 0)))
+    achieved["achieved/npc_level3_kill"] = int(sum(idx & (log[:, attr_to_col["target_ent"]] < 0) & 
+                                                   (log[:, attr_to_col["level"]] >= level_crit)))
+    achieved["achieved/ammo_fire_count"] = event_cnt["event/fire_ammo"]
+    achieved["achieved/consume_item_count"] = event_cnt["event/consume_item"]
+
+    # add item-related things
+    if detailed_stat:
+        own_idx = np.in1d(log[:, attr_to_col["event"]],
+                          [EventCode.HARVEST_ITEM, EventCode.LOOT_ITEM, EventCode.BUY_ITEM])
+        use_idx = np.in1d(log[:, attr_to_col["event"]],
+                          [EventCode.CONSUME_ITEM, EventCode.EQUIP_ITEM])
+        buy_idx = (log[:, attr_to_col["event"]] == EventCode.BUY_ITEM)
+        for item in Item.ALL_ITEM:
+            item_idx = log[:, attr_to_col["item_type"]] == item.ITEM_TYPE_ID
+            level1_idx = log[:, attr_to_col["level"]] == 1
+            level3_idx = log[:, attr_to_col["level"]] >= level_crit
+            performed["item_" + item.__name__ + "/pcnt_owned_all_levels"] = sum(own_idx & item_idx) > 0
+            performed["item_" + item.__name__ + "/pcnt_owned_level3_up"] = sum(own_idx & item_idx & level3_idx) > 0
+            performed["item_" + item.__name__ + "/pcnt_used_all_levels"] = sum(use_idx & item_idx) > 0
+            performed["item_" + item.__name__ + "/pcnt_used_level3_up"] = sum(use_idx & item_idx & level3_idx) > 0
+            if sum(buy_idx & item_idx & level1_idx) > 0:
+              performed["item_" + item.__name__ + "/purchase_price_level1"] = \
+                np.mean(log[buy_idx & item_idx & level1_idx, attr_to_col["price"]])
+            if sum(buy_idx & item_idx & level3_idx) > 0:
+              performed["item_" + item.__name__ + "/purchase_price_level3_up"] = \
+                np.mean(log[buy_idx & item_idx & level3_idx, attr_to_col["price"]])
 
     return achieved, performed, event_cnt
 
@@ -413,3 +467,34 @@ def calculate_entropy(sequence):
         probability = freq / total_elements
         entropy -= probability * math.log2(probability)
     return entropy
+
+def get_skill_stat(agent):
+    level_crit = 3
+    skill_list = ["melee", "range", "mage", "fishing", "herbalism", "prospecting", "carving", "alchemy"]
+    skill_stat = {}
+    for skill in skill_list:
+        skill_stat[skill + "_exp"] = getattr(agent, skill + "_exp").val
+        skill_stat["pcnt_" + skill + "_level3_up"] = int(getattr(agent, skill + "_level").val >= level_crit)  # 1 or 0
+    return skill_stat
+
+def get_market_stat(realm):
+    # get the purchase count and total amount for all and each item type,
+    # for all items, level 1 and level 3+ items
+    market_stat = {}
+    market_log = realm.event_log.get_data(event_code=EventCode.BUY_ITEM)
+    attr_to_col = realm.event_log.attr_to_col
+    item_level = {
+        "all": market_log[:, attr_to_col["level"]] > 0,
+        "level1_only": market_log[:, attr_to_col["level"]] == 1,
+        "level3_up": market_log[:, attr_to_col["level"]] >= 3,
+    }
+
+    for level, level_idx in item_level.items():
+        key = "market_" + level
+        for item_type, item_ids in ITEM_TYPE.items():
+            item_idx = np.in1d(market_log[:, attr_to_col["item_type"]], item_ids)
+            market_stat[key + "/" + item_type + "_purchase_count"] = sum(item_idx & level_idx)
+            market_stat[key + "/" + item_type + "_amount"] = \
+                np.sum(market_log[item_idx & level_idx, attr_to_col["price"]])
+
+    return market_stat

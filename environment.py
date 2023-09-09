@@ -7,7 +7,8 @@ import pufferlib.emulation
 
 from leader_board import StatPostprocessor, calculate_entropy
 
-class Config(nmmo.config.Default):
+#class Config(nmmo.config.Default):
+class Config(nmmo.config.Easy):
     """Configuration for Neural MMO."""
 
     def __init__(self, args: Namespace):
@@ -34,6 +35,7 @@ class Config(nmmo.config.Default):
 class Postprocessor(StatPostprocessor):
     def __init__(self, env, is_multiagent, agent_id,
         eval_mode=False,
+        detailed_stat=False,
         early_stop_agent_num=0,
         sqrt_achievement_rewards=False,
         heal_bonus_weight=0,
@@ -41,7 +43,7 @@ class Postprocessor(StatPostprocessor):
         explore_bonus_weight=0,
         clip_unique_event=3,
     ):
-        super().__init__(env, agent_id, eval_mode)
+        super().__init__(env, agent_id, eval_mode, detailed_stat)
         self.early_stop_agent_num = early_stop_agent_num
         self.sqrt_achievement_rewards = sqrt_achievement_rewards
         self.heal_bonus_weight = heal_bonus_weight
@@ -119,6 +121,7 @@ def make_env_creator(args: Namespace):
             postprocessor_cls=Postprocessor,
             postprocessor_kwargs={
                 'eval_mode': args.eval_mode,
+                'detailed_stat': args.detailed_stat,
                 'early_stop_agent_num': args.early_stop_agent_num,
                 'sqrt_achievement_rewards': args.sqrt_achievement_rewards,
                 'heal_bonus_weight': args.heal_bonus_weight,
