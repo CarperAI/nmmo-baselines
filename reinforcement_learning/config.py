@@ -14,9 +14,9 @@ class Config:
     # Trainer Args
     seed = 1
     num_cores = None  # Number of cores to use for training
-    num_envs = 6  # Number of environments to use for training
+    num_envs = 16  # Number of environments to use for training
     num_buffers = 2  # Number of buffers to use for training
-    rollout_batch_size = 2**15 # Number of steps to rollout
+    rollout_batch_size = 2**16 # Number of steps to rollout
     eval_batch_size = 2**15 # Number of steps to rollout for eval
     train_num_steps = 10_000_000  # Number of steps to train
     eval_num_steps = 1_000_000  # Number of steps to evaluate
@@ -52,11 +52,14 @@ class Config:
     eval_mode = False # Run the postprocessor in the eval mode
     detailed_stat = False # Run the postprocessor in the detailed stat mode, which sends a lot to wandb
     early_stop_agent_num = 8  # Stop the episode when the number of agents reaches this number
+    spawn_immunity = 20
+
+    # Reward Args
     sqrt_achievement_rewards=False # Use the log of achievement rewards
     heal_bonus_weight = 0.03
+    underdog_bonus_weight = 0.05
     meander_bonus_weight = 0.02
     explore_bonus_weight = 0.01
-    spawn_immunity = 20
 
     # Policy Args
     input_size = 256

@@ -44,8 +44,9 @@ class Baseline(pufferlib.models.Policy):
     self.item_encoder = ItemEncoder(input_size, hidden_size)
     self.inventory_encoder = InventoryEncoder(input_size, hidden_size)
     self.market_encoder = MarketEncoder(input_size, hidden_size)
+    self.combat_encoder = CombatEncoder(input_size)
     self.task_encoder = TaskEncoder(input_size, hidden_size, task_size)
-    self.proj_fc = torch.nn.Linear(5 * input_size, input_size)
+    self.proj_fc = torch.nn.Linear(6 * input_size, input_size)
     self.action_decoder = ActionDecoder(input_size, hidden_size)
     self.value_head = torch.nn.Linear(hidden_size, 1)
 
@@ -59,12 +60,14 @@ class Baseline(pufferlib.models.Policy):
     item_embeddings = self.item_encoder(env_outputs["Inventory"])
     inventory = self.inventory_encoder(item_embeddings)
 
+    combat = self.combat_encoder(env_outputs["CombatAttr"], env_outputs["Equipment"])
+
     market_embeddings = self.item_encoder(env_outputs["Market"])
     market = self.market_encoder(market_embeddings)
 
     task = self.task_encoder(env_outputs["Task"])
 
-    obs = torch.cat([tile, my_agent, inventory, market, task], dim=-1)
+    obs = torch.cat([tile, my_agent, inventory, combat, market, task], dim=-1)
     obs = self.proj_fc(obs)
 
     return obs, (
@@ -223,6 +226,17 @@ class TaskEncoder(torch.nn.Module):
 
   def forward(self, task):
     return self.fc(task.clone())
+
+
+class CombatEncoder(torch.nn.Module):
+  def __init__(self, input_size):
+    super().__init__()
+    # Equipment: 17x10, Combat Attr: 6
+    self.fc = torch.nn.Linear(17*10 + 6, input_size)
+
+  def forward(self, combat_attr, equipment):
+    equipment = equipment.view(equipment.shape[0], -1)  # flatten
+    return self.fc(torch.cat([combat_attr, equipment], dim=-1))
 
 
 class ActionDecoder(torch.nn.Module):

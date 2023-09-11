@@ -221,6 +221,12 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._prev_unique_count = self._curr_unique_count
         self._curr_unique_count = len(extract_unique_event(log, self.env.realm.event_log.attr_to_col))
 
+        # Check the last tick event
+        attr_to_col = self.env.realm.event_log.attr_to_col
+        last_kill_idx = (log[:, attr_to_col["tick"]] == self.env.realm.tick) & \
+                        (log[:, attr_to_col["event"]] == EventCode.PLAYER_KILL)
+        self._last_kill_level = max(log[last_kill_idx, attr_to_col["level"]]) if sum(last_kill_idx) > 0 else 0
+
         if not done:
             self.epoch_length += 1
             self.epoch_return += reward
@@ -435,14 +441,15 @@ def extract_unique_event(log, attr_to_col):
     cols_to_ignore = {
         EventCode.GO_FARTHEST: ["distance"],
         EventCode.SCORE_HIT: ["damage"],
-        # treat each (item, level) differently
+        #EventCode.PLAYER_KILL: ["target_ent"],
+        # treat each (item, level) differently but count only once 
         EventCode.CONSUME_ITEM: ["quantity"],
-        # but, count each (item, level) only once
         EventCode.HARVEST_ITEM: ["quantity"],
         EventCode.EQUIP_ITEM: ["quantity"],
         EventCode.LOOT_ITEM: ["quantity"],
-        EventCode.LIST_ITEM: ["quantity", "price"],
-        EventCode.BUY_ITEM: ["quantity", "price"],
+        EventCode.FIRE_AMMO: ["quantity"],
+        EventCode.LIST_ITEM: ["type", "quantity", "price"],
+        EventCode.BUY_ITEM: ["type", "quantity", "price"],
     }
 
     for code, attrs in cols_to_ignore.items():
@@ -451,10 +458,10 @@ def extract_unique_event(log, attr_to_col):
             log[idx, attr_to_col[attr]] = 0
 
     # make every EARN_GOLD events unique, from looting and selling
-    idx = log[:, attr_to_col["event"]] == EventCode.EARN_GOLD
-    log[idx, attr_to_col["number"]] = log[
-        idx, attr_to_col["tick"]
-    ].copy()  # this is a hack
+    # idx = log[:, attr_to_col["event"]] == EventCode.EARN_GOLD
+    # log[idx, attr_to_col["number"]] = log[
+    #     idx, attr_to_col["tick"]
+    # ].copy()  # this is a hack
 
     # return unique events after masking
     return set(tuple(row) for row in log[:, attr_to_col["event"]:])

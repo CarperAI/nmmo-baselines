@@ -18,6 +18,7 @@ from nmmo.task.base_predicates import (
     CountEvent,
     EarnGold,
     EquipItem,
+    FireAmmo,
     GainExperience,
     HarvestItem,
     HoardGold,
@@ -34,7 +35,8 @@ from nmmo.task.task_spec import TaskSpec, check_task_spec
 
 EVENT_NUMBER_GOAL = [1, 2, 3, 5, 7, 9, 12, 15, 20, 30, 50]
 INFREQUENT_GOAL = list(range(1, 10))
-STAY_ALIVE_GOAL = EXP_GOAL = [50, 100, 150, 200, 300, 500, 700]
+STAY_ALIVE_GOAL = [50, 100, 150, 200, 300, 500, 700]
+EXP_GOAL = [5, 10, 15, 20, 30, 50, 70, 100, 150, 200, 300, 500]
 LEVEL_GOAL = list(range(2, 10))  # TODO: get config
 AGENT_NUM_GOAL = ITEM_NUM_GOAL = [1, 2, 3, 4, 5]  # competition team size: 8
 SKILLS = c.combat_skills + c.harvest_skills
@@ -42,15 +44,20 @@ COMBAT_STYLE = c.combat_skills
 ALL_ITEM = c.armour + c.weapons + c.tools + c.ammunition + c.consumables
 EQUIP_ITEM = c.armour + c.weapons + c.tools + c.ammunition
 HARVEST_ITEM = c.weapons + c.ammunition + c.consumables
-TOOL_FOR_SKILL = {
-    Skill.Melee: Item.Spear,
-    Skill.Range: Item.Bow,
-    Skill.Mage: Item.Wand,
-    Skill.Fishing: Item.Rod,
-    Skill.Herbalism: Item.Gloves,
+TOOL_FOR_SKILL = {  # focus on the carving, prospecting, and alchemy
+    # Skill.Melee: Item.Spear,
+    # Skill.Range: Item.Bow,
+    # Skill.Mage: Item.Wand,
+    # Skill.Fishing: Item.Rod,
+    # Skill.Herbalism: Item.Gloves,
     Skill.Carving: Item.Axe,
     Skill.Prospecting: Item.Pickaxe,
     Skill.Alchemy: Item.Chisel,
+}
+AMMO_AND_SKILL = {
+    Skill.Carving: Item.Arrow,
+    Skill.Prospecting: Item.Whetstone,
+    Skill.Alchemy: Item.Runes,
 }
 
 curriculum: List[TaskSpec] = []
@@ -120,6 +127,10 @@ def PracticeSkillWithTool(gs, subject, skill, exp):
   return 0.3 * EquipItem(gs, subject, item=TOOL_FOR_SKILL[skill], level=1, num_agent=1) + \
          0.7 * GainExperience(gs, subject, skill, exp, num_agent=1)
 
+def HarvestAndUseAmmo(gs, subject, skill, quantity):
+  return 0.2 * EquipItem(gs, subject, item=TOOL_FOR_SKILL[skill], level=1, num_agent=1) + \
+         0.8 * FireAmmo(gs, subject, item=AMMO_AND_SKILL[skill], level=1, quantity=quantity)
+
 for skill in SKILLS:
   # level up a skill
   for level in LEVEL_GOAL[1:]:
@@ -132,15 +143,26 @@ for skill in SKILLS:
         )
     )
   
-  # gain experience on particular skill
-  for exp in EXP_GOAL:
-    curriculum.append(
-        TaskSpec(
-            eval_fn=PracticeSkillWithTool,
-            eval_fn_kwargs={"skill": skill, "exp": exp},
-            sampling_weight=50,
+  # focus on the carving, prospecting, and alchemy
+  if skill in TOOL_FOR_SKILL:
+      for exp in EXP_GOAL:
+        curriculum.append(
+            TaskSpec(
+                eval_fn=PracticeSkillWithTool,
+                eval_fn_kwargs={"skill": skill, "exp": exp},
+                sampling_weight=20,
+            )
         )
-    )
+
+  if skill in AMMO_AND_SKILL:
+      for quantity in INFREQUENT_GOAL:
+        curriculum.append(
+            TaskSpec(
+                eval_fn=HarvestAndUseAmmo,
+                eval_fn_kwargs={"skill": skill, "quantity": quantity},
+                sampling_weight=50,
+            )
+        )
 
 # stay alive ... like ... for 300 ticks
 # i.e., getting incremental reward for each tick alive as an individual or a team
@@ -244,9 +266,21 @@ for item in EQUIP_ITEM:
         TaskSpec(
             eval_fn=EquipItem,
             eval_fn_kwargs={"item": item, "level": level, "num_agent": 1},
-            sampling_weight=10*(4 - level) if level < 4 else 1,
+            sampling_weight=4 - level if level < 4 else 1,
         )
     )
+
+# equip hat, top, bottom at the same time
+def EquipAllArmor(gs, subject):
+  return sum(EquipItem(gs, subject, item=item, level=1, num_agent=1) for item in c.armour) / 3
+
+curriculum.append(
+    TaskSpec(
+        eval_fn=EquipAllArmor,
+        eval_fn_kwargs={},
+        sampling_weight=20,
+    )
+)
 
 # consume items (ration, potion), evaluated based on the event log
 for item in c.consumables:
@@ -262,7 +296,7 @@ for item in c.consumables:
                     "level": level,
                     "quantity": quantity,
                 },
-                sampling_weight=5*(4 - level) if level < 4 else 1,
+                sampling_weight=4 - level if level < 4 else 1,
             )
         )
 
@@ -280,7 +314,7 @@ for item in HARVEST_ITEM:
                     "level": level,
                     "quantity": quantity,
                 },
-                sampling_weight=10*(4 - level) if level < 4 else 1,
+                sampling_weight=4 - level if level < 4 else 1,
             )
         )
 

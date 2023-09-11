@@ -8,7 +8,7 @@ import pufferlib.emulation
 from leader_board import StatPostprocessor, calculate_entropy
 
 #class Config(nmmo.config.Default):
-class Config(nmmo.config.Easy):
+class Config(nmmo.config.Tutorial):
     """Configuration for Neural MMO."""
 
     def __init__(self, args: Namespace):
@@ -39,6 +39,7 @@ class Postprocessor(StatPostprocessor):
         early_stop_agent_num=0,
         sqrt_achievement_rewards=False,
         heal_bonus_weight=0,
+        underdog_bonus_weight = 0,
         meander_bonus_weight=0,
         explore_bonus_weight=0,
         clip_unique_event=3,
@@ -47,6 +48,7 @@ class Postprocessor(StatPostprocessor):
         self.early_stop_agent_num = early_stop_agent_num
         self.sqrt_achievement_rewards = sqrt_achievement_rewards
         self.heal_bonus_weight = heal_bonus_weight
+        self.underdog_bonus_weight = underdog_bonus_weight
         self.meander_bonus_weight = meander_bonus_weight
         self.explore_bonus_weight = explore_bonus_weight
         self.clip_unique_event = clip_unique_event
@@ -88,9 +90,13 @@ class Postprocessor(StatPostprocessor):
 
         # Add "Healing" score based on health increase and decrease due to food and water
         healing_bonus = 0
+        underdog_bonus = 0
         if self.agent_id in self.env.realm.players:
-            if self.env.realm.players[self.agent_id].resources.health_restore > 0:
+            agent = self.env.realm.players[self.agent_id]
+            if agent.resources.health_restore > 0:
                 healing_bonus = self.heal_bonus_weight
+            if self._last_kill_level > agent.attack_level:
+                underdog_bonus = self.underdog_bonus_weight
 
         # Add meandering bonus to encourage moving to various directions
         meander_bonus = 0
@@ -107,7 +113,7 @@ class Postprocessor(StatPostprocessor):
                                 self._curr_unique_count - self._prev_unique_count)
         explore_bonus *= self.explore_bonus_weight
 
-        reward = reward + explore_bonus + healing_bonus + meander_bonus
+        reward = reward + explore_bonus + healing_bonus + meander_bonus + underdog_bonus
 
         return reward, done, info
 
@@ -125,6 +131,7 @@ def make_env_creator(args: Namespace):
                 'early_stop_agent_num': args.early_stop_agent_num,
                 'sqrt_achievement_rewards': args.sqrt_achievement_rewards,
                 'heal_bonus_weight': args.heal_bonus_weight,
+                'underdog_bonus_weight': args.underdog_bonus_weight,
                 'meander_bonus_weight': args.meander_bonus_weight,
                 'explore_bonus_weight': args.explore_bonus_weight,
             },
