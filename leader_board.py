@@ -289,6 +289,7 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
 
         if self.detailed_stat and self.is_env_done():
             info["stats"].update(get_market_stat(self.env.realm))
+            info["stats"].update(get_supply_stat(self.env.realm))
 
         return reward, done, info
 
@@ -475,8 +476,7 @@ def calculate_entropy(sequence):
         entropy -= probability * math.log2(probability)
     return entropy
 
-def get_skill_stat(agent):
-    level_crit = 3
+def get_skill_stat(agent, level_crit=3):
     skill_list = ["melee", "range", "mage", "fishing", "herbalism", "prospecting", "carving", "alchemy"]
     skill_stat = {}
     for skill in skill_list:
@@ -484,7 +484,7 @@ def get_skill_stat(agent):
         skill_stat["pcnt_" + skill + "_level3_up"] = int(getattr(agent, skill + "_level").val >= level_crit)  # 1 or 0
     return skill_stat
 
-def get_market_stat(realm):
+def get_market_stat(realm, level_crit=3):
     # get the purchase count and total amount for all and each item type,
     # for all items, level 1 and level 3+ items
     market_stat = {}
@@ -493,7 +493,7 @@ def get_market_stat(realm):
     item_level = {
         "all": market_log[:, attr_to_col["level"]] > 0,
         "level1_only": market_log[:, attr_to_col["level"]] == 1,
-        "level3_up": market_log[:, attr_to_col["level"]] >= 3,
+        "level3_up": market_log[:, attr_to_col["level"]] >= level_crit,
     }
 
     for level, level_idx in item_level.items():
@@ -505,3 +505,49 @@ def get_market_stat(realm):
                 np.sum(market_log[item_idx & level_idx, attr_to_col["price"]])
 
     return market_stat
+
+def get_supply_stat(realm, level_crit=3):
+    supply_stat = {}
+    log = realm.event_log.get_data()
+    attr_to_col = realm.event_log.attr_to_col
+
+    # level is used for both npcs and items
+    level_idx = log[:, attr_to_col["level"]] >= level_crit
+
+    # NPCs killed by players: total and level 3+
+    idx = (log[:, attr_to_col["event"]] == EventCode.PLAYER_KILL) & \
+          (log[:, attr_to_col["target_ent"]] < 0)
+    supply_stat["supply/npc_kill_count"] = int(sum(idx))
+    supply_stat["supply/npc_level3_kill_count"] = int(sum(idx & level_idx))
+
+    # Money created from npcs & spent
+    created_idx = (log[:, attr_to_col["event"]] == EventCode.LOOT_GOLD) & \
+                  (log[:, attr_to_col["target_ent"]] < 0)
+    supply_stat["supply/created_gold"] = int(sum(log[created_idx, attr_to_col["gold"]]))
+    spent_idx = (log[:, attr_to_col["event"]] == EventCode.BUY_ITEM)
+    supply_stat["supply/spent_gold"] = int(sum(log[spent_idx, attr_to_col["price"]]))
+
+    # Items created
+    for item_type, item_ids in ITEM_TYPE.items():
+        if item_type == "all_item":
+            continue
+        item_idx = np.in1d(log[:, attr_to_col["item_type"]], item_ids)
+        if item_type in ["armor", "tool"]:
+            # items from npcs: armor, tool
+            created_idx = (log[:, attr_to_col["event"]] == EventCode.LOOT_ITEM) & \
+                          (log[:, attr_to_col["target_ent"]] < 0) & item_idx
+        else:
+            # items from harvest: weapon, ammo, consumable
+            created_idx = (log[:, attr_to_col["event"]] == EventCode.HARVEST_ITEM) & item_idx
+        supply_stat["supply/" + item_type + "_count_all"] = \
+            int(np.sum(log[created_idx,attr_to_col["quantity"]]))
+        supply_stat["supply/" + item_type + "_level3_count"] = \
+            int(np.sum(log[created_idx & level_idx, attr_to_col["quantity"]]))
+
+        if item_type == "ammo":
+            # ammo usage from fire ammo
+            fire_idx = (log[:, attr_to_col["event"]] == EventCode.FIRE_AMMO) & item_idx
+            supply_stat["supply/" + item_type + "_fire_all"] = int(sum(fire_idx))
+            supply_stat["supply/" + item_type + "_fire_level3"] = int(sum(fire_idx & level_idx))
+
+    return supply_stat
