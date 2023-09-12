@@ -477,7 +477,7 @@ def calculate_entropy(sequence):
     return entropy
 
 def get_skill_stat(agent, level_crit=3):
-    skill_list = ["melee", "range", "mage", "fishing", "herbalism", "prospecting", "carving", "alchemy"]
+    skill_list = ["melee", "range", "mage", "fishing", "herbalism"]
     skill_stat = {}
     for skill in skill_list:
         skill_stat[skill + "_exp"] = getattr(agent, skill + "_exp").val

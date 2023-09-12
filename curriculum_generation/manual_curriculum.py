@@ -44,20 +44,15 @@ COMBAT_STYLE = c.combat_skills
 ALL_ITEM = c.armour + c.weapons + c.tools + c.ammunition + c.consumables
 EQUIP_ITEM = c.armour + c.weapons + c.tools + c.ammunition
 HARVEST_ITEM = c.weapons + c.ammunition + c.consumables
-TOOL_FOR_SKILL = {  # focus on the carving, prospecting, and alchemy
-    # Skill.Melee: Item.Spear,
-    # Skill.Range: Item.Bow,
-    # Skill.Mage: Item.Wand,
-    # Skill.Fishing: Item.Rod,
-    # Skill.Herbalism: Item.Gloves,
-    Skill.Carving: Item.Axe,
-    Skill.Prospecting: Item.Pickaxe,
-    Skill.Alchemy: Item.Chisel,
+TOOL_FOR_SKILL = {
+    Skill.Melee: Item.Axe,
+    Skill.Range: Item.Pickaxe,
+    Skill.Mage: Item.Chisel,
 }
 AMMO_AND_SKILL = {
-    Skill.Carving: Item.Arrow,
-    Skill.Prospecting: Item.Whetstone,
-    Skill.Alchemy: Item.Runes,
+    Skill.Melee: Item.Arrow,
+    Skill.Range: Item.Whetstone,
+    Skill.Mage: Item.Runes,
 }
 
 curriculum: List[TaskSpec] = []
