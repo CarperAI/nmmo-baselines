@@ -391,16 +391,14 @@ def process_event_log(realm, agent_list, detailed_stat=False, level_crit=3):
     achieved["achieved/max_damage"] = int(max(log[idx, attr_to_col["damage"]])) if sum(idx) > 0 else 0
 
     # get max possessed item levels: from harvesting, looting, buying
-    idx = np.in1d(log[:, attr_to_col["event"]],
-                  [EventCode.HARVEST_ITEM, EventCode.LOOT_ITEM, EventCode.BUY_ITEM])
+    idx = np.in1d(log[:, attr_to_col["event"]], [EventCode.EQUIP_ITEM, EventCode.CONSUME_ITEM])
     if sum(idx) > 0:
         for item_type, item_ids in ITEM_TYPE.items():
             if item_type == "all_item":
                 continue
             idx_item = idx & np.in1d(log[:, attr_to_col["item_type"]], item_ids)
-            use_idx = np.in1d(log[:, attr_to_col["event"]], [EventCode.EQUIP_ITEM, EventCode.CONSUME_ITEM])
-            if sum(idx_item & use_idx) > 0:  # record this only when the item has been used/equipped
-              achieved["achieved/max_" + item_type + "_level"] = int(max(log[idx_item & use_idx, attr_to_col["level"]]))
+            if sum(idx_item) > 0:  # record this only when the item has been used/equipped
+              achieved["achieved/max_" + item_type + "_level"] = int(max(log[idx_item, attr_to_col["level"]]))
 
     # other notable achievements
     idx = (log[:, attr_to_col["event"]] == EventCode.PLAYER_KILL)
