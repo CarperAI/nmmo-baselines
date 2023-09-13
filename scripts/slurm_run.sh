@@ -9,7 +9,7 @@
 #SBATCH --partition=g40x
 #SBATCH --nodes=1
 #SBATCH --gpus=1
-#SBATCH --cpus-per-gpu=6
+#SBATCH --cpus-per-gpu=16
 #__SBATCH --mem=80G
 #SBATCH --chdir=/fsx/proj-nmmo/nmmo-baselines/
 #SBATCH --output=sbatch/%j.log
