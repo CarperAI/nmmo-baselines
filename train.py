@@ -72,6 +72,7 @@ def reinforcement_learning_track(trainer, args):
             bptt_horizon=args.bptt_horizon,
             batch_rows=args.ppo_training_batch_size // args.bptt_horizon,
             clip_coef=args.clip_coef,
+            anneal_lr=args.anneal_lr,
         )
 
 def curriculum_generation_track(trainer, args, use_elm=True):

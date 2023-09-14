@@ -36,7 +36,8 @@ class Config:
     bptt_horizon = 8  # Train on this number of steps of a rollout at a time. Used to reduce GPU memory.
     ppo_training_batch_size = 128  # Number of rows in a training batch
     ppo_update_epochs = 3  # Number of update epochs to use for training
-    ppo_learning_rate = 0.00015  # Learning rate
+    ppo_learning_rate = 0.0001  # Learning rate
+    anneal_lr = False  # Anneal learning rate
     clip_coef = 0.1  # PPO clip coefficient
 
     # Environment Args
