@@ -549,4 +549,8 @@ def get_supply_stat(realm, level_crit=3):
             supply_stat["supply/" + item_type + "_fire_all"] = int(sum(fire_idx))
             supply_stat["supply/" + item_type + "_fire_level3"] = int(sum(fire_idx & level_idx))
 
+        if item_type != "consumable":
+          auto_idx = log[:, attr_to_col["event"]] == EventCode.AUTO_EQUIP
+          supply_stat["supply/" + item_type + "_auto_equip"] = int(sum(auto_idx & item_idx))
+
     return supply_stat
