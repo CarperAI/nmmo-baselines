@@ -20,7 +20,6 @@ class Config(nmmo.config.Tutorial):
         self.PLAYER_N = args.num_agents
         self.HORIZON = args.max_episode_length
         self.MAP_N = args.num_maps
-        self.PLAYER_DEATH_FOG = args.death_fog_tick
         self.PATH_MAPS = f"{args.maps_path}/{args.map_size}/"
         self.MAP_CENTER = args.map_size
         self.NPC_N = args.num_npcs
@@ -30,7 +29,9 @@ class Config(nmmo.config.Tutorial):
 
         self.COMMUNICATION_SYSTEM_ENABLED = False
 
-        self.COMBAT_SPAWN_IMMUNITY = args.spawn_immunity
+        # These affect training
+        #self.PLAYER_DEATH_FOG = args.death_fog_tick
+        #self.COMBAT_SPAWN_IMMUNITY = args.spawn_immunity
 
 class Postprocessor(StatPostprocessor):
     def __init__(self, env, is_multiagent, agent_id,

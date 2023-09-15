@@ -15,7 +15,7 @@
 #SBATCH --output=sbatch/%j.log
 #SBATCH --error=sbatch/%j.log
 #SBATCH --requeue
-#SBATCH --export=PYTHONUNBUFFERED=1,WANDB_BASE_URL="https://stability.wandb.io",WANDB_DIR=/fsx/proj-nmmo/tmp/wandb,WANDB_CONFIG_DIR=/fsx/proj-nmmo/tmp/wandb
+#SBATCH --export=PYTHONUNBUFFERED=1,WANDB_DIR=/fsx/proj-nmmo/tmp/wandb,WANDB_CONFIG_DIR=/fsx/proj-nmmo/tmp/wandb
 
 source /fsx/proj-nmmo/venv/bin/activate && \
 ulimit -c unlimited && \
