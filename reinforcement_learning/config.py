@@ -18,7 +18,7 @@ class Config:
     num_buffers = 2  # Number of buffers to use for training
     rollout_batch_size = 2**16 # Number of steps to rollout
     eval_batch_size = 2**15 # Number of steps to rollout for eval
-    train_num_steps = 10_000_000  # Number of steps to train
+    train_num_steps = 15_000_000  # Number of steps to train
     eval_num_steps = 1_000_000  # Number of steps to evaluate
     checkpoint_interval = 30  # Interval to save models
     run_name = f"nmmo_{time.strftime('%Y%m%d_%H%M%S')}"  # Run name
@@ -41,7 +41,7 @@ class Config:
     clip_coef = 0.1  # PPO clip coefficient
 
     # Environment Args
-    num_agents = 128  # Number of agents to use for training
+    num_agents = 64  # Number of agents to use for training
     num_npcs = 256  # Number of NPCs to use for training
     max_episode_length = 1024  # Number of steps per episode
     death_fog_tick = None  # Number of ticks before death fog starts
@@ -58,7 +58,7 @@ class Config:
     # Reward Args
     sqrt_achievement_rewards=False # Use the log of achievement rewards
     heal_bonus_weight = 0.03
-    underdog_bonus_weight = 0.05
+    underdog_bonus_weight = 0
     combat_attribute_bonus_weight = 0.05
     ammo_bonus_weight = 0.02
     meander_bonus_weight = 0.02
