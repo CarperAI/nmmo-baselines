@@ -42,6 +42,8 @@ class Postprocessor(StatPostprocessor):
         heal_bonus_weight=0,
         underdog_bonus_weight = 0,
         meander_bonus_weight=0,
+        combat_attribute_bonus_weight=0,
+        ammo_bonus_weight=0,
         explore_bonus_weight=0,
         clip_unique_event=3,
     ):
@@ -51,6 +53,8 @@ class Postprocessor(StatPostprocessor):
         self.heal_bonus_weight = heal_bonus_weight
         self.underdog_bonus_weight = underdog_bonus_weight
         self.meander_bonus_weight = meander_bonus_weight
+        self.combat_attribute_bonus_weight = combat_attribute_bonus_weight
+        self.ammo_bonus_weight = ammo_bonus_weight
         self.explore_bonus_weight = explore_bonus_weight
         self.clip_unique_event = clip_unique_event
 
@@ -89,15 +93,24 @@ class Postprocessor(StatPostprocessor):
         # Default reward shaper sums team rewards.
         # Add custom reward shaping here.
 
-        # Add "Healing" score based on health increase and decrease due to food and water
         healing_bonus = 0
         underdog_bonus = 0
-        if self.agent_id in self.env.realm.players:
+        combat_attribute_bonus = 0
+        if not done:
             agent = self.env.realm.players[self.agent_id]
-            if agent.resources.health_restore > 0:
-                healing_bonus = self.heal_bonus_weight
-            if self._last_kill_level > agent.attack_level:
-                underdog_bonus = self.underdog_bonus_weight
+
+            # Add "Healing" score based on health increase and decrease due to food and water
+            healing_bonus = self.heal_bonus_weight * float(agent.resources.health_restore > 0)
+
+            # Add "Underdog" bonus to encourage attacking higher level agents
+            underdog_bonus = self.underdog_bonus_weight * float(self._last_kill_level > agent.attack_level)
+
+            # Add combat attribute bonus to encourage leveling up offense/defense
+            combat_attribute_bonus = self.combat_attribute_bonus_weight * \
+                                    (self._new_max_offense + self._new_max_defense)
+
+        # Add ammo fire bonus to encourage using ammo
+        ammo_fire_bonus = self.ammo_bonus_weight * self._last_ammo_fire
 
         # Add meandering bonus to encourage moving to various directions
         meander_bonus = 0
@@ -114,7 +127,8 @@ class Postprocessor(StatPostprocessor):
                                 self._curr_unique_count - self._prev_unique_count)
         explore_bonus *= self.explore_bonus_weight
 
-        reward = reward + explore_bonus + healing_bonus + meander_bonus + underdog_bonus
+        reward += explore_bonus + healing_bonus + meander_bonus + underdog_bonus +\
+                  combat_attribute_bonus + ammo_fire_bonus
 
         return reward, done, info
 
@@ -133,6 +147,8 @@ def make_env_creator(args: Namespace):
                 'sqrt_achievement_rewards': args.sqrt_achievement_rewards,
                 'heal_bonus_weight': args.heal_bonus_weight,
                 'underdog_bonus_weight': args.underdog_bonus_weight,
+                'combat_attribute_bonus_weight': args.combat_attribute_bonus_weight,
+                'ammo_bonus_weight': args.ammo_bonus_weight,
                 'meander_bonus_weight': args.meander_bonus_weight,
                 'explore_bonus_weight': args.explore_bonus_weight,
             },

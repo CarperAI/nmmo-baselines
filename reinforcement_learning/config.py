@@ -59,6 +59,8 @@ class Config:
     sqrt_achievement_rewards=False # Use the log of achievement rewards
     heal_bonus_weight = 0.03
     underdog_bonus_weight = 0.05
+    combat_attribute_bonus_weight = 0.05
+    ammo_bonus_weight = 0.02
     meander_bonus_weight = 0.02
     explore_bonus_weight = 0.01
 

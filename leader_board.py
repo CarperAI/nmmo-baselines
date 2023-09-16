@@ -156,6 +156,12 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         # saving actions for masking/scoring
         self._last_moves = []
         self._last_price = 0
+        self._last_kill_level = 0
+        self._last_ammo_fire = 0  # if an ammo was used in the last tick
+        self._max_offense = 0  # max melee/range/mage equipment offense so far
+        self._new_max_offense = 0
+        self._max_defense = 0  # max melee/range/mage equipment defense so far
+        self._new_max_defense = 0
 
     def _update_stats(self, agent):
         task = self.env.agent_task_map[agent.ent_id][0]
@@ -226,8 +232,25 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         last_kill_idx = (log[:, attr_to_col["tick"]] == self.env.realm.tick) & \
                         (log[:, attr_to_col["event"]] == EventCode.PLAYER_KILL)
         self._last_kill_level = max(log[last_kill_idx, attr_to_col["level"]]) if sum(last_kill_idx) > 0 else 0
+        last_ammo_idx = (log[:, attr_to_col["tick"]] == self.env.realm.tick) & \
+                        (log[:, attr_to_col["event"]] == EventCode.FIRE_AMMO)
+        self._last_ammo_fire = int(sum(last_ammo_idx) > 0)
 
         if not done:
+            # Check the agent attributes
+            agent = self.env.realm.players[self.agent_id]  # this should run without problem
+            max_offense = max(agent.melee_attack, agent.range_attack, agent.mage_attack)
+            self._new_max_offense = 0
+            if max_offense > self._max_offense:
+                self._new_max_offense = 1.0 if self.env.realm.tick > 1 else 0
+                self._max_offense = max_offense
+            max_defense = max(agent.melee_defense, agent.range_defense, agent.mage_defense)
+            self._new_max_defense = 0
+            if max_defense > self._max_defense:
+                self._new_max_defense = 1.0 if self.env.realm.tick > 1 else 0
+                self._max_defense = max_defense
+
+            # Must-include stats
             self.epoch_length += 1
             self.epoch_return += reward
             return reward, done, info
