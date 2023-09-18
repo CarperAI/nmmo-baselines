@@ -37,17 +37,22 @@ class Random(pufferlib.models.Policy):
 class Baseline(pufferlib.models.Policy):
   def __init__(self, env, input_size=256, hidden_size=256, task_size=4096):
     super().__init__()
+    self.config = env.env.config  # nmmo config
 
     self.flat_observation_space = env.flat_observation_space
     self.flat_observation_structure = env.flat_observation_structure
 
-    self.tile_encoder = TileEncoder(input_size)
+    tile_attr_dim = 4 if self.config.PROVIDE_DEATH_FOG_OBS is True else 3
+    self.tile_encoder = TileEncoder(input_size, tile_attr_dim)
+
     self.player_encoder = PlayerEncoder(input_size, hidden_size)
     self.item_encoder = ItemEncoder(input_size, hidden_size)
     self.inventory_encoder = InventoryEncoder(input_size, hidden_size)
     self.market_encoder = MarketEncoder(input_size, hidden_size)
     self.combat_encoder = CombatEncoder(input_size)
     self.task_encoder = TaskEncoder(input_size, hidden_size, task_size)
+
+    # taking in: tile, my_agent, inventory, combat, market, task
     self.proj_fc = torch.nn.Linear(6 * input_size, input_size)
     self.action_decoder = ActionDecoder(input_size, hidden_size)
     self.value_head = torch.nn.Linear(hidden_size, 1)
@@ -87,18 +92,24 @@ class Baseline(pufferlib.models.Policy):
 
 
 class TileEncoder(torch.nn.Module):
-  def __init__(self, input_size):
+  def __init__(self, input_size, tile_attr_dim):
     super().__init__()
-    self.tile_offset = torch.tensor([i * 256 for i in range(3)])
-    self.embedding = torch.nn.Embedding(3 * 256, 32)
+    self.tile_attr_dim = tile_attr_dim
+    embed_dim = 32
+    self.tile_offset = torch.tensor([i * 256 for i in range(tile_attr_dim)])
+    self.embedding = torch.nn.Embedding(tile_attr_dim * 256, embed_dim)
 
-    self.tile_conv_1 = torch.nn.Conv2d(96, 32, 3)
-    self.tile_conv_2 = torch.nn.Conv2d(32, 8, 3)
+    self.tile_conv_1 = torch.nn.Conv2d(embed_dim * tile_attr_dim, embed_dim, kernel_size=3)
+    self.tile_conv_2 = torch.nn.Conv2d(embed_dim, 8, kernel_size=3)
     self.tile_fc = torch.nn.Linear(8 * 11 * 11, input_size)
 
   def forward(self, tile):
+    # row, col centering for each agent. row 112 is the agent's position
     tile[:, :, :2] -= tile[:, 112:113, :2].clone()
-    tile[:, :, :2] += 7
+    # since the embedding clips the value to 0-255, we need to offset the values
+    tile[:, :, :2] += 7  # row & col
+    if self.tile_attr_dim > 3:
+        tile[:, :, 3] += 160 # self.config.MAP_SIZE. For fog, -MAP_SIZE is the minimum value
     tile = self.embedding(
         tile.long().clip(0, 255) + self.tile_offset.to(tile.device)
     )

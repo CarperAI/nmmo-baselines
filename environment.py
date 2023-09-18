@@ -16,6 +16,7 @@ class Config(nmmo.config.Tutorial):
 
         self.PROVIDE_ACTION_TARGETS = True
         self.PROVIDE_NOOP_ACTION_TARGET = True
+        self.PROVIDE_DEATH_FOG_OBS = True
         self.MAP_FORCE_GENERATION = False
         self.PLAYER_N = args.num_agents
         self.HORIZON = args.max_episode_length
@@ -29,7 +30,7 @@ class Config(nmmo.config.Tutorial):
 
         self.COMMUNICATION_SYSTEM_ENABLED = False
 
-        # These affect training
+        # These affect training -- use the Tutorial config
         #self.PLAYER_DEATH_FOG = args.death_fog_tick
         #self.COMBAT_SPAWN_IMMUNITY = args.spawn_immunity
 
