@@ -61,7 +61,7 @@ class Config:
     underdog_bonus_weight = 0
     combat_attribute_bonus_weight = 0.05
     ammo_bonus_weight = 0.02
-    meander_bonus_weight = 0.02
+    meander_bonus_weight = 0.03
     explore_bonus_weight = 0.01
 
     # Policy Args

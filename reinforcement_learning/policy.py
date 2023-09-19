@@ -40,9 +40,11 @@ class Baseline(pufferlib.models.Policy):
     self.flat_observation_space = env.flat_observation_space
     self.flat_observation_structure = env.flat_observation_structure
 
-    # tile_attr_dim = 4 if self.config.PROVIDE_DEATH_FOG_OBS is True else 3
-    # self.tile_encoder = TileEncoder(input_size, tile_attr_dim)
-    self.tile_encoder = ResnetTileEncoder(13, [25, 25])
+    tile_attr_dim = 4 if self.config.PROVIDE_DEATH_FOG_OBS is True else 3
+    proj_fc_multiplier = 6
+    self.tile_encoder = OriginalTileEncoder(input_size, tile_attr_dim)
+    #self.tile_encoder = ResnetTileEncoder(13, [25, 25])
+    #proj_fc_multiplier = 9
 
     self.player_encoder = PlayerEncoder(input_size, hidden_size)
     self.item_encoder = ItemEncoder(input_size, hidden_size)
@@ -52,7 +54,7 @@ class Baseline(pufferlib.models.Policy):
     self.task_encoder = TaskEncoder(input_size, hidden_size, task_size)
 
     # taking in: tile (4*256), my_agent, inventory, combat, market, task
-    self.proj_fc = torch.nn.Linear(9 * input_size, input_size)
+    self.proj_fc = torch.nn.Linear(proj_fc_multiplier * input_size, input_size)
     self.action_decoder = ActionDecoder(input_size, hidden_size)
     self.value_head = torch.nn.Linear(hidden_size, 1)
 

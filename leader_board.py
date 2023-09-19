@@ -158,6 +158,7 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._last_price = 0
         self._last_kill_level = 0
         self._last_ammo_fire = 0  # if an ammo was used in the last tick
+        self._last_go_farthest = 0  # if the agent broke the farthest record in the last tick
         self._max_offense = 0  # max melee/range/mage equipment offense so far
         self._new_max_offense = 0
         self._max_defense = 0  # max melee/range/mage equipment defense so far
@@ -235,6 +236,9 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         last_ammo_idx = (log[:, attr_to_col["tick"]] == self.env.realm.tick) & \
                         (log[:, attr_to_col["event"]] == EventCode.FIRE_AMMO)
         self._last_ammo_fire = int(sum(last_ammo_idx) > 0)
+        last_farthest = (log[:, attr_to_col["tick"]] == self.env.realm.tick) & \
+                        (log[:, attr_to_col["event"]] == EventCode.GO_FARTHEST)
+        self._last_go_farthest = int(sum(last_farthest) > 0)
 
         if not done:
             # Check the agent attributes

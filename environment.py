@@ -67,6 +67,7 @@ class Postprocessor(StatPostprocessor):
         super().reset(obs)
         self.map_helper.reset()
 
+    """
     @property
     def observation_space(self):
         '''If you modify the shape of features, you need to specify the new obs space'''
@@ -83,6 +84,7 @@ class Postprocessor(StatPostprocessor):
         self.map_helper.update(obs)
         obs["Tile"] = self.map_helper.extract_tile_feature()
         return obs
+    """
 
     """
     def action(self, action):
@@ -121,11 +123,12 @@ class Postprocessor(StatPostprocessor):
         # Add ammo fire bonus to encourage using ammo
         ammo_fire_bonus = self.ammo_bonus_weight * self._last_ammo_fire
 
-        # Add meandering bonus to encourage moving to various directions
+        # Add meandering bonus to encourage meandering yet moving toward the center
         meander_bonus = 0
-        if len(self._last_moves) > 5:
+        if len(self._last_moves) > 5 and self._last_go_farthest > 0:
           move_entropy = calculate_entropy(self._last_moves[-8:])  # of last 8 moves
-          meander_bonus = self.meander_bonus_weight * (move_entropy - 1)
+          if move_entropy > 1.2:
+              meander_bonus = self.meander_bonus_weight
 
         # Unique event-based rewards, similar to exploration bonus
         # The number of unique events are available in self._curr_unique_count, self._prev_unique_count
