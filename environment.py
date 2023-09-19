@@ -6,6 +6,7 @@ import pufferlib
 import pufferlib.emulation
 
 from leader_board import StatPostprocessor, calculate_entropy
+from map_helper import MapHelper
 
 #class Config(nmmo.config.Default):
 class Config(nmmo.config.Tutorial):
@@ -59,24 +60,31 @@ class Postprocessor(StatPostprocessor):
         self.explore_bonus_weight = explore_bonus_weight
         self.clip_unique_event = clip_unique_event
 
+        self.map_helper = MapHelper(env.config, agent_id)
+
     def reset(self, obs):
         '''Called at the start of each episode'''
         super().reset(obs)
+        self.map_helper.reset()
 
     @property
     def observation_space(self):
         '''If you modify the shape of features, you need to specify the new obs space'''
-        return super().observation_space
+        obs_space = super().observation_space
+        obs_space["Tile"] = self.map_helper.observation_space
+        return obs_space
 
-    """
     def observation(self, obs):
         '''Called before observations are returned from the environment
 
         Use this to define custom featurizers. Changing the space itself requires you to
         define the observation space again (i.e. Gym.spaces.Dict(gym.spaces....))
         '''
+        self.map_helper.update(obs)
+        obs["Tile"] = self.map_helper.extract_tile_feature()
         return obs
 
+    """
     def action(self, action):
         '''Called before actions are passed from the model to the environment'''
         return action

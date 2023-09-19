@@ -1,14 +1,12 @@
-import argparse
 import torch
 import torch.nn.functional as F
-from typing import Dict
 
 import pufferlib
 import pufferlib.emulation
 import pufferlib.models
-
-import nmmo
 from nmmo.entity.entity import EntityState
+
+from reinforcement_learning.resnet import ResNet
 
 EntityId = EntityState.State.attr_name_to_col["id"]
 
@@ -42,8 +40,9 @@ class Baseline(pufferlib.models.Policy):
     self.flat_observation_space = env.flat_observation_space
     self.flat_observation_structure = env.flat_observation_structure
 
-    tile_attr_dim = 4 if self.config.PROVIDE_DEATH_FOG_OBS is True else 3
-    self.tile_encoder = TileEncoder(input_size, tile_attr_dim)
+    # tile_attr_dim = 4 if self.config.PROVIDE_DEATH_FOG_OBS is True else 3
+    # self.tile_encoder = TileEncoder(input_size, tile_attr_dim)
+    self.tile_encoder = ResnetTileEncoder(13, [25, 25])
 
     self.player_encoder = PlayerEncoder(input_size, hidden_size)
     self.item_encoder = ItemEncoder(input_size, hidden_size)
@@ -52,15 +51,15 @@ class Baseline(pufferlib.models.Policy):
     self.combat_encoder = CombatEncoder(input_size)
     self.task_encoder = TaskEncoder(input_size, hidden_size, task_size)
 
-    # taking in: tile, my_agent, inventory, combat, market, task
-    self.proj_fc = torch.nn.Linear(6 * input_size, input_size)
+    # taking in: tile (4*256), my_agent, inventory, combat, market, task
+    self.proj_fc = torch.nn.Linear(9 * input_size, input_size)
     self.action_decoder = ActionDecoder(input_size, hidden_size)
     self.value_head = torch.nn.Linear(hidden_size, 1)
 
   def encode_observations(self, flat_observations):
     env_outputs = pufferlib.emulation.unpack_batched_obs(flat_observations,
         self.flat_observation_space, self.flat_observation_structure)
-    tile = self.tile_encoder(env_outputs["Tile"])
+    tile = self.tile_encoder(env_outputs["Tile"])  # 1024
     player_embeddings, my_agent = self.player_encoder(
         env_outputs["Entity"], env_outputs["AgentId"][:, 0]
     )
@@ -91,7 +90,25 @@ class Baseline(pufferlib.models.Policy):
     return actions, value
 
 
-class TileEncoder(torch.nn.Module):
+class ResnetTileEncoder(torch.nn.Module):
+  def __init__(self, in_ch, in_size):
+    super().__init__()
+
+    self.tile_net = ResNet(
+      in_ch, in_size, channel_and_blocks=[[32, 2], [32, 2], [64, 2]])
+
+    sample_in = torch.zeros(1, in_ch, *in_size)
+    with torch.no_grad():
+      self.h_size = len(self.tile_net(sample_in).flatten())  # (1, 64, 4, 4) -> 1024
+
+  def forward(self, tile_obs):
+    bs = tile_obs.shape[0]
+    h_tile = self.tile_net(tile_obs)
+    h_tile = h_tile.view(bs, -1)  # flatten
+    return h_tile
+
+
+class OriginalTileEncoder(torch.nn.Module):
   def __init__(self, input_size, tile_attr_dim):
     super().__init__()
     self.tile_attr_dim = tile_attr_dim
