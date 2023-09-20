@@ -34,7 +34,7 @@ class Random(pufferlib.models.Policy):
 
 class Baseline(pufferlib.models.Policy):
   def __init__(self, env, input_size=256, hidden_size=256, task_size=4096):
-    super().__init__()
+    super().__init__(env)
     self.config = env.env.config  # nmmo config
 
     self.flat_observation_space = env.flat_observation_space
