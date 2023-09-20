@@ -143,8 +143,8 @@ class Postprocessor(StatPostprocessor):
 
           if self._last_go_farthest > 0 and self._farthest_bonus_refractory_period == 0:
               meander_bonus += self.progress_bonus_weight
-              # refer to bptt horizon. the bonus is given twice at max during each backprop
-              self._farthest_bonus_refractory_period = 5
+              # refer to bptt horizon. the bonus is given once at max during each backprop
+              self._farthest_bonus_refractory_period = 8
 
         # Unique event-based rewards, similar to exploration bonus
         # The number of unique events are available in self._curr_unique_count, self._prev_unique_count
