@@ -128,7 +128,7 @@ class OriginalTileEncoder(torch.nn.Module):
     # since the embedding clips the value to 0-255, we need to offset the values
     tile[:, :, :2] += 7  # row & col
     if self.tile_attr_dim > 3:
-        tile[:, :, 3] += 160 # self.config.MAP_SIZE. For fog, -MAP_SIZE is the minimum value
+        tile[:, :, 3] = torch.clamp(tile[:, :, 3], min=0)  # death fog
     tile = self.embedding(
         tile.long().clip(0, 255) + self.tile_offset.to(tile.device)
     )
