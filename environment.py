@@ -69,7 +69,8 @@ class Postprocessor(StatPostprocessor):
         self.explore_bonus_weight = explore_bonus_weight
         self.clip_unique_event = clip_unique_event
 
-        self.map_helper = MapHelper(env.config, agent_id)
+        #self.map_helper = MapHelper(env.config, agent_id)
+        self._farthest_bonus_refractory_period = 0
 
     def reset(self, obs):
         '''Called at the start of each episode'''
@@ -135,11 +136,15 @@ class Postprocessor(StatPostprocessor):
 
         # Add meandering bonus to encourage meandering yet moving toward the center
         meander_bonus = 0
+        self._farthest_bonus_refractory_period -= 1 if self._farthest_bonus_refractory_period > 0 else 0
         if len(self._last_moves) > 5:
           move_entropy = calculate_entropy(self._last_moves[-8:])  # of last 8 moves
           meander_bonus += self.meander_bonus_weight * (move_entropy - 1)
-          if move_entropy > 1 and self._last_go_farthest > 0:
+
+          if self._last_go_farthest > 0 and self._farthest_bonus_refractory_period == 0:
               meander_bonus += self.progress_bonus_weight
+              # set to bptt horizon + 1, so that the bonus is given once at max during each backprop
+              self._farthest_bonus_refractory_period = 9
 
         # Unique event-based rewards, similar to exploration bonus
         # The number of unique events are available in self._curr_unique_count, self._prev_unique_count
