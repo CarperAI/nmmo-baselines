@@ -75,7 +75,7 @@ class Postprocessor(StatPostprocessor):
     def reset(self, obs):
         '''Called at the start of each episode'''
         super().reset(obs)
-        self.map_helper.reset()
+        #self.map_helper.reset()
 
     @property
     def observation_space(self):
