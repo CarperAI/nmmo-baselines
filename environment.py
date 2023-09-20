@@ -1,12 +1,19 @@
 from argparse import Namespace
 import math
 
+import gym.spaces
+import numpy as np
+
 import nmmo
+from nmmo.lib import material
 import pufferlib
 import pufferlib.emulation
 
 from leader_board import StatPostprocessor, calculate_entropy
 from map_helper import MapHelper
+
+IMPASSIBLE = list(material.Impassible.indices)
+
 
 #class Config(nmmo.config.Default):
 class Config(nmmo.config.Tutorial):
@@ -69,12 +76,13 @@ class Postprocessor(StatPostprocessor):
         super().reset(obs)
         self.map_helper.reset()
 
-    """
     @property
     def observation_space(self):
         '''If you modify the shape of features, you need to specify the new obs space'''
         obs_space = super().observation_space
-        obs_space["Tile"] = self.map_helper.observation_space
+        # Add obstacle tile map -- the org obs space is (225, 4)
+        obs_space["Tile"] = gym.spaces.Box(
+          low=-2**15, high=2**15-1, shape=(225, 5), dtype=np.int16)
         return obs_space
 
     def observation(self, obs):
@@ -83,10 +91,10 @@ class Postprocessor(StatPostprocessor):
         Use this to define custom featurizers. Changing the space itself requires you to
         define the observation space again (i.e. Gym.spaces.Dict(gym.spaces....))
         '''
-        self.map_helper.update(obs)
-        obs["Tile"] = self.map_helper.extract_tile_feature()
+        # Add obstacle tile map to the obs
+        obstacle = np.isin(obs["Tile"][:,2], IMPASSIBLE).astype(np.int16)
+        obs["Tile"] = np.concatenate([obs["Tile"], obstacle[:,None]], axis=1)
         return obs
-    """
 
     """
     def action(self, action):

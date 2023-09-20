@@ -40,7 +40,8 @@ class Baseline(pufferlib.models.Policy):
     self.flat_observation_space = env.flat_observation_space
     self.flat_observation_structure = env.flat_observation_structure
 
-    tile_attr_dim = 4 if self.config.PROVIDE_DEATH_FOG_OBS is True else 3
+    # obs["Tile"] has death fog and obstacle info
+    tile_attr_dim = 5 if self.config.PROVIDE_DEATH_FOG_OBS is True else 3
     proj_fc_multiplier = 6
     self.tile_encoder = OriginalTileEncoder(input_size, tile_attr_dim)
     #self.tile_encoder = ResnetTileEncoder(13, [25, 25])
