@@ -44,6 +44,7 @@ class Postprocessor(StatPostprocessor):
         heal_bonus_weight=0,
         underdog_bonus_weight = 0,
         meander_bonus_weight=0,
+        progress_bonus_weight=0,
         combat_attribute_bonus_weight=0,
         ammo_bonus_weight=0,
         explore_bonus_weight=0,
@@ -55,6 +56,7 @@ class Postprocessor(StatPostprocessor):
         self.heal_bonus_weight = heal_bonus_weight
         self.underdog_bonus_weight = underdog_bonus_weight
         self.meander_bonus_weight = meander_bonus_weight
+        self.progress_bonus_weight = progress_bonus_weight
         self.combat_attribute_bonus_weight = combat_attribute_bonus_weight
         self.ammo_bonus_weight = ammo_bonus_weight
         self.explore_bonus_weight = explore_bonus_weight
@@ -125,10 +127,11 @@ class Postprocessor(StatPostprocessor):
 
         # Add meandering bonus to encourage meandering yet moving toward the center
         meander_bonus = 0
-        if len(self._last_moves) > 5 and self._last_go_farthest > 0:
+        if len(self._last_moves) > 5:
           move_entropy = calculate_entropy(self._last_moves[-8:])  # of last 8 moves
-          if move_entropy > 1.2:
-              meander_bonus = self.meander_bonus_weight
+          meander_bonus += self.meander_bonus_weight * (move_entropy - 1)
+          if move_entropy > 1 and self._last_go_farthest > 0:
+              meander_bonus += self.progress_bonus_weight
 
         # Unique event-based rewards, similar to exploration bonus
         # The number of unique events are available in self._curr_unique_count, self._prev_unique_count
