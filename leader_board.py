@@ -1,8 +1,7 @@
 from typing import Optional, List
 from dataclasses import dataclass
-from collections import defaultdict, Counter
+from collections import defaultdict
 
-import math
 import numpy as np
 
 import pufferlib
@@ -112,10 +111,15 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
     """Postprocessing actions and metrics of Neural MMO.
        Process wandb/leader board stats, and save replays.
     """
-    def __init__(self, env, agent_id, eval_mode=False, detailed_stat=False):
+    def __init__(self, env, agent_id,
+                 eval_mode=False,
+                 detailed_stat=False,
+                 early_stop_agent_num=0,
+    ):
         super().__init__(env, is_multiagent=True, agent_id=agent_id)
         self.eval_mode = eval_mode
         self.detailed_stat = detailed_stat
+        self.early_stop_agent_num = early_stop_agent_num
         self._reset_episode_stats()
 
     def reset(self, observation):
@@ -135,8 +139,6 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._curriculum = defaultdict(list)
         self._combat_level = []
         self._harvest_level = []
-        self._prev_unique_count = 0
-        self._curr_unique_count = 0
 
         # for agent results
         self._time_alive = 0
@@ -152,18 +154,6 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._prospecting_level = 0
         self._carving_level = 0
         self._alchemy_level = 0
-
-        # saving actions for masking/scoring
-        self._last_moves = []
-        self._last_price = 0
-        self._last_kill_level = 0
-        self._last_ammo_fire = 0  # if an ammo was used in the last tick
-        self._last_go_farthest = 0  # if the agent broke the farthest record in the last tick
-        self._max_offense = 0  # max melee/range/mage equipment offense so far
-        self._new_max_offense = 0
-        self._max_defense = 0  # max melee/range/mage equipment defense so far
-        self._new_max_defense = 0
-        self._curr_death_fog = 0
 
     def _update_stats(self, agent):
         task = self.env.agent_task_map[agent.ent_id][0]
@@ -208,55 +198,16 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._carving_level += agent.carving_level.val
         self._alchemy_level += agent.alchemy_level.val
 
-    def observation(self, observation):
-        # Mask out the last selected price
-        observation["ActionTargets"]["Sell"]["Price"][self._last_price] = 0
-        return observation
-
-    def action(self, action):
-        self._last_moves.append(action[8])  # 8 is the index for move direction
-        self._last_price = action[10]  # 10 is the index for selling price
-        return action
-
     def reward_done_info(self, reward, done, info):
         """Update stats + info and save replays."""
-
         # Remove the task from info. Curriculum info is processed in _update_stats()
         info.pop('task', None)
 
-        # Count and store unique event counts for easier use
-        log = self.env.realm.event_log.get_data(agents=[self.agent_id])
-        self._prev_unique_count = self._curr_unique_count
-        self._curr_unique_count = len(extract_unique_event(log, self.env.realm.event_log.attr_to_col))
-
-        # Check the last tick event
-        attr_to_col = self.env.realm.event_log.attr_to_col
-        last_kill_idx = (log[:, attr_to_col["tick"]] == self.env.realm.tick) & \
-                        (log[:, attr_to_col["event"]] == EventCode.PLAYER_KILL)
-        self._last_kill_level = max(log[last_kill_idx, attr_to_col["level"]]) if sum(last_kill_idx) > 0 else 0
-        last_ammo_idx = (log[:, attr_to_col["tick"]] == self.env.realm.tick) & \
-                        (log[:, attr_to_col["event"]] == EventCode.FIRE_AMMO)
-        self._last_ammo_fire = int(sum(last_ammo_idx) > 0)
-        last_farthest = (log[:, attr_to_col["tick"]] == self.env.realm.tick) & \
-                        (log[:, attr_to_col["event"]] == EventCode.GO_FARTHEST)
-        self._last_go_farthest = int(sum(last_farthest) > 0)
+        # Stop early if there are too few agents generating the training data
+        if len(self.env.agents) <= self.early_stop_agent_num:
+            done = True
 
         if not done:
-            # Check the agent attributes
-            agent = self.env.realm.players[self.agent_id]  # this should run without problem
-            max_offense = max(agent.melee_attack, agent.range_attack, agent.mage_attack)
-            self._new_max_offense = 0
-            if max_offense > self._max_offense:
-                self._new_max_offense = 1.0 if self.env.realm.tick > 1 else 0
-                self._max_offense = max_offense
-            max_defense = max(agent.melee_defense, agent.range_defense, agent.mage_defense)
-            self._new_max_defense = 0
-            if max_defense > self._max_defense:
-                self._new_max_defense = 1.0 if self.env.realm.tick > 1 else 0
-                self._max_defense = max_defense
-            self._curr_death_fog = self.env.realm.fog_map[agent.pos]
-
-            # Must-include stats
             self.epoch_length += 1
             self.epoch_return += reward
             return reward, done, info
@@ -269,6 +220,8 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         )
         assert agent is not None
         self._update_stats(agent)
+        log = self.env.realm.event_log.get_data(agents=[self.agent_id])
+        curr_unique_count = len(extract_unique_event(log, self.env.realm.event_log.attr_to_col))
 
         info['return'] = self.epoch_return
         info['length'] = self.epoch_length
@@ -282,7 +235,7 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         info["stats"]["achieved/max_combat_level"] = max(self._combat_level)
         info["stats"]["achieved/max_harvest_level"] = max(self._harvest_level)
         info["stats"]["achieved/team_time_alive"] = self._time_alive
-        info["stats"]["achieved/unique_events"] = self._curr_unique_count
+        info["stats"]["achieved/unique_events"] = curr_unique_count
         if self.detailed_stat:
             info["stats"]["skill"] = get_skill_stat(agent)
         info["curriculum"] = self._curriculum
@@ -293,7 +246,7 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
 
         # Fill in the "TeamResult"
         result.max_task_progress = self._max_task_progress
-        result.total_score = self._curr_unique_count
+        result.total_score = curr_unique_count
         result.time_alive = self._time_alive
         result.earned_gold = achieved["achieved/earned_gold"]
         result.completed_task_count = self._task_completed
@@ -494,15 +447,6 @@ def extract_unique_event(log, attr_to_col):
 
     # return unique events after masking
     return set(tuple(row) for row in log[:, attr_to_col["event"]:])
-
-def calculate_entropy(sequence):
-    frequencies = Counter(sequence)
-    total_elements = len(sequence)
-    entropy = 0
-    for freq in frequencies.values():
-        probability = freq / total_elements
-        entropy -= probability * math.log2(probability)
-    return entropy
 
 def get_skill_stat(agent, level_crit=3):
     skill_list = ["melee", "range", "mage", "fishing", "herbalism"]

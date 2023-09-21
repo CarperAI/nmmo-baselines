@@ -44,7 +44,6 @@ class Config:
     num_agents = 64  # Number of agents to use for training
     num_npcs = 256  # Number of NPCs to use for training
     max_episode_length = 1024  # Number of steps per episode
-    death_fog_tick = None  # Number of ticks before death fog starts
     num_maps = 128  # Number of maps to use for training
     maps_path = "maps/train/"  # Path to maps to use for training
     map_size = 128  # Size of maps to use for training
@@ -53,17 +52,14 @@ class Config:
     eval_mode = False # Run the postprocessor in the eval mode
     detailed_stat = True # Run the postprocessor in the detailed stat mode, which sends a lot to wandb
     early_stop_agent_num = 8  # Stop the episode when the number of agents reaches this number
-    spawn_immunity = 20
 
     # Reward Args
-    sqrt_achievement_rewards=False # Use the log of achievement rewards
-    heal_bonus_weight = 0.03
-    underdog_bonus_weight = 0
-    combat_attribute_bonus_weight = 0.02
-    ammo_bonus_weight = 0.01
-    meander_bonus_weight = 0.01
     progress_bonus_weight = 0.05
-    explore_bonus_weight = 0.01
+    meander_bonus_weight = 0.01
+    heal_bonus_weight = 0.03
+    equipment_bonus_weight = 0.02
+    ammofire_bonus_weight = 0.01
+    unique_event_bonus_weight = 0.01
 
     # Policy Args
     input_size = 256
