@@ -114,12 +114,16 @@ class Postprocessor(StatPostprocessor):
 
         # Default reward shaper sums team rewards.
         # Add custom reward shaping here.
-
-        healing_bonus = 0
-        underdog_bonus = 0
-        combat_attribute_bonus = 0
         if not done:
             agent = self.env.realm.players[self.agent_id]
+
+            # Add "Progress toward the center" bonus
+            progress_bonus = 0
+            self._farthest_bonus_refractory_period -= 1 if self._farthest_bonus_refractory_period > 0 else 0
+            if self._last_go_farthest > 0 and self._farthest_bonus_refractory_period == 0:
+                progress_bonus = self.progress_bonus_weight
+                # refer to bptt horizon. the bonus is given once at max during each backprop
+                self._farthest_bonus_refractory_period = 8
 
             # Add "Healing" score based on health increase and decrease due to food and water
             healing_bonus = self.heal_bonus_weight * float(agent.resources.health_restore > 0)
@@ -131,32 +135,29 @@ class Postprocessor(StatPostprocessor):
             combat_attribute_bonus = self.combat_attribute_bonus_weight * \
                                     (self._new_max_offense + self._new_max_defense)
 
-        # Add ammo fire bonus to encourage using ammo
-        ammo_fire_bonus = self.ammo_bonus_weight * self._last_ammo_fire
+            # Add ammo fire bonus to encourage using ammo
+            ammo_fire_bonus = self.ammo_bonus_weight * self._last_ammo_fire
 
-        # Add meandering bonus to encourage meandering yet moving toward the center
-        meander_bonus = 0
-        self._farthest_bonus_refractory_period -= 1 if self._farthest_bonus_refractory_period > 0 else 0
-        if len(self._last_moves) > 5:
-          move_entropy = calculate_entropy(self._last_moves[-8:])  # of last 8 moves
-          meander_bonus += self.meander_bonus_weight * (move_entropy - 1)
+            # Add meandering bonus to encourage meandering yet moving toward the center
+            meander_bonus = 0
+            if len(self._last_moves) > 5:
+              move_entropy = calculate_entropy(self._last_moves[-8:])  # of last 8 moves
+              meander_bonus += self.meander_bonus_weight * (move_entropy - 1)
 
-          if self._last_go_farthest > 0 and self._farthest_bonus_refractory_period == 0:
-              meander_bonus += self.progress_bonus_weight
-              # refer to bptt horizon. the bonus is given once at max during each backprop
-              self._farthest_bonus_refractory_period = 8
+            # Unique event-based rewards, similar to exploration bonus
+            # The number of unique events are available in self._curr_unique_count, self._prev_unique_count
+            if self.sqrt_achievement_rewards:
+                explore_bonus = math.sqrt(self._curr_unique_count) - math.sqrt(self._prev_unique_count)
+            else:
+                explore_bonus = min(self.clip_unique_event,
+                                    self._curr_unique_count - self._prev_unique_count)
+            explore_bonus *= self.explore_bonus_weight
 
-        # Unique event-based rewards, similar to exploration bonus
-        # The number of unique events are available in self._curr_unique_count, self._prev_unique_count
-        if self.sqrt_achievement_rewards:
-            explore_bonus = math.sqrt(self._curr_unique_count) - math.sqrt(self._prev_unique_count)
-        else:
-            explore_bonus = min(self.clip_unique_event,
-                                self._curr_unique_count - self._prev_unique_count)
-        explore_bonus *= self.explore_bonus_weight
-
-        reward += explore_bonus + healing_bonus + meander_bonus + underdog_bonus +\
-                  combat_attribute_bonus + ammo_fire_bonus
+            # sum up all the bonuses. Add most of bonus, when the agent is NOT under death fog
+            reward += progress_bonus
+            if self._curr_death_fog < 3:  # under a very light death fog, easy to run away yet
+                reward += explore_bonus + healing_bonus + meander_bonus + underdog_bonus +\
+                          combat_attribute_bonus + ammo_fire_bonus
 
         return reward, done, info
 

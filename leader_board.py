@@ -163,6 +163,7 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._new_max_offense = 0
         self._max_defense = 0  # max melee/range/mage equipment defense so far
         self._new_max_defense = 0
+        self._curr_death_fog = 0
 
     def _update_stats(self, agent):
         task = self.env.agent_task_map[agent.ent_id][0]
@@ -253,6 +254,7 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
             if max_defense > self._max_defense:
                 self._new_max_defense = 1.0 if self.env.realm.tick > 1 else 0
                 self._max_defense = max_defense
+            self._curr_death_fog = self.env.realm.fog_map[agent.pos]
 
             # Must-include stats
             self.epoch_length += 1
