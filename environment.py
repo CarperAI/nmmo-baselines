@@ -130,9 +130,8 @@ class Postprocessor(StatPostprocessor):
         self._reset_reward_vars()
         task_name = self.env.agent_task_map[self.agent_id][0].name
         self._main_combat_skill = self._choose_combat_skill(task_name)
-        skill_embedding = np.array([0, 0, 0], dtype=np.float16)
-        skill_embedding[SKILL_LIST.index(self._main_combat_skill)] = 1
-        self._skill_task_embedding = np.hstack((skill_embedding, obs["Task"]))
+        self._combat_embedding = np.zeros(9, dtype=np.int16)  # copy CombatAttr to [3:]
+        self._combat_embedding[SKILL_LIST.index(self._main_combat_skill)] = 1
 
     @staticmethod
     def _choose_combat_skill(task_name):
@@ -148,10 +147,10 @@ class Postprocessor(StatPostprocessor):
     def observation_space(self):
         """If you modify the shape of features, you need to specify the new obs space"""
         obs_space = super().observation_space
-        # Add main combat skill (3) to the task embedding
-        task_embed_dim = 3 + obs_space["Task"].shape[0]
-        obs_space["Task"] = gym.spaces.Box(low=-2**15, high=2**15-1, dtype=np.float16,
-                                           shape=(task_embed_dim,))
+        # Add main combat skill (3) to the combat attr
+        combat_dim = 3 + obs_space["CombatAttr"].shape[0]
+        obs_space["CombatAttr"] = gym.spaces.Box(low=-2**15, high=2**15-1, dtype=np.int16,
+                                           shape=(combat_dim,))
         # Add informative tile maps: obstacle, food, water, ammo
         tile_dim = obs_space["Tile"].shape[1] + 4
         obs_space["Tile"] = gym.spaces.Box(low=-2**15, high=2**15-1, dtype=np.int16,
@@ -164,8 +163,9 @@ class Postprocessor(StatPostprocessor):
         Use this to define custom featurizers. Changing the space itself requires you to
         define the observation space again (i.e. Gym.spaces.Dict(gym.spaces....))
         """
-        # Add main combat skill to the task embedding
-        obs["Task"] = self._skill_task_embedding
+        # Add main combat skill to the combat embedding
+        self._combat_embedding[3:] = obs["CombatAttr"]
+        obs["CombatAttr"] = self._combat_embedding
 
         # Add obstacle tile map to the obs
         # TODO: add entity map, update the harvest status -- how much can they help?

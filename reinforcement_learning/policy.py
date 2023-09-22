@@ -51,7 +51,9 @@ class Baseline(pufferlib.models.Policy):
     self.item_encoder = ItemEncoder(input_size, hidden_size)
     self.inventory_encoder = InventoryEncoder(input_size, hidden_size)
     self.market_encoder = MarketEncoder(input_size, hidden_size)
-    self.combat_encoder = CombatEncoder(input_size)
+
+    combat_dim = env.structured_observation_space["CombatAttr"].shape[0]
+    self.combat_encoder = CombatEncoder(input_size, combat_dim)
 
     task_size = env.structured_observation_space["Task"].shape[0]
     self.task_encoder = TaskEncoder(input_size, hidden_size, task_size)
@@ -265,10 +267,10 @@ class TaskEncoder(torch.nn.Module):
 
 
 class CombatEncoder(torch.nn.Module):
-  def __init__(self, input_size):
+  def __init__(self, input_size, combat_dim, equipment_dim=170):
     super().__init__()
-    # Equipment: 17x10, Combat Attr: 6
-    self.fc = torch.nn.Linear(17*10 + 6, input_size)
+    # equipment_dim: 17 items x 10 levels
+    self.fc = torch.nn.Linear(combat_dim + equipment_dim, input_size)
 
   def forward(self, combat_attr, equipment):
     equipment = equipment.view(equipment.shape[0], -1)  # flatten
