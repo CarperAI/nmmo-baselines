@@ -33,7 +33,7 @@ class Random(pufferlib.models.Policy):
 
 
 class Baseline(pufferlib.models.Policy):
-  def __init__(self, env, input_size=256, hidden_size=256, task_size=4096):
+  def __init__(self, env, input_size=256, hidden_size=256):
     super().__init__(env)
     self.config = env.env.config  # nmmo config
 
@@ -41,20 +41,22 @@ class Baseline(pufferlib.models.Policy):
     self.flat_observation_structure = env.flat_observation_structure
 
     # obs["Tile"] has death fog and obstacle info
-    tile_attr_dim = 5 if self.config.PROVIDE_DEATH_FOG_OBS is True else 3
     proj_fc_multiplier = 6
+    tile_attr_dim = env.structured_observation_space["Tile"].shape[1]
     self.tile_encoder = OriginalTileEncoder(input_size, tile_attr_dim)
     #self.tile_encoder = ResnetTileEncoder(13, [25, 25])
-    #proj_fc_multiplier = 9
+    #proj_fc_multiplier = 9  # resnet provides 4*256
 
     self.player_encoder = PlayerEncoder(input_size, hidden_size)
     self.item_encoder = ItemEncoder(input_size, hidden_size)
     self.inventory_encoder = InventoryEncoder(input_size, hidden_size)
     self.market_encoder = MarketEncoder(input_size, hidden_size)
     self.combat_encoder = CombatEncoder(input_size)
+
+    task_size = env.structured_observation_space["Task"].shape[0]
     self.task_encoder = TaskEncoder(input_size, hidden_size, task_size)
 
-    # taking in: tile (4*256), my_agent, inventory, combat, market, task
+    # taking in: tile, my_agent, inventory, combat, market, task
     self.proj_fc = torch.nn.Linear(proj_fc_multiplier * input_size, input_size)
     self.action_decoder = ActionDecoder(input_size, hidden_size)
     self.value_head = torch.nn.Linear(hidden_size, 1)

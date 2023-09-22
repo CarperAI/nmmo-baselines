@@ -11,10 +11,38 @@ import pufferlib.emulation
 import nmmo
 from nmmo.lib import material
 from nmmo.lib.log import EventCode
+import nmmo.systems.item as Item
 
 from leader_board import StatPostprocessor, extract_unique_event
 
 IMPASSIBLE = list(material.Impassible.indices)
+
+# We can use the following mapping from task name (skill/item name as arg) to profession
+TASK_TO_SKILL_MAP = {
+    ":melee_": "melee",  # skils
+    ":range_": "range",
+    ":mage_": "mage",
+    ":spear_": "melee",  # weapons
+    ":bow_": "range",
+    ":wand_": "mage",
+    ":pickaxe_": "melee",  # tools
+    ":axe_": "range",
+    ":chisel_": "mage",
+    ":whetstone": "melee",  # ammo
+    ":arrow_": "range",
+    ":runes_": "mage",
+}
+SKILL_LIST = sorted(list(set(skill for skill in TASK_TO_SKILL_MAP.values())))
+SKILL_TO_AMMO_MAP = {
+    "melee": Item.Whetstone.ITEM_TYPE_ID,
+    "range": Item.Arrow.ITEM_TYPE_ID,
+    "mage": Item.Runes.ITEM_TYPE_ID,
+}
+SKILL_TO_TILE_MAP = {
+    "melee": material.Ore.index,
+    "range": material.Tree.index,
+    "mage": material.Crystal.index,
+}
 
 
 #class Config(nmmo.config.Default):
@@ -83,6 +111,7 @@ class Postprocessor(StatPostprocessor):
         underdog_bonus_weight = 0,
     ):
         super().__init__(env, agent_id, eval_mode, detailed_stat, early_stop_agent_num)
+        self.config = env.config
         self.progress_bonus_weight = progress_bonus_weight
         self.meander_bonus_weight = meander_bonus_weight
         self.heal_bonus_weight = heal_bonus_weight
@@ -92,18 +121,41 @@ class Postprocessor(StatPostprocessor):
         self.clip_unique_event = clip_unique_event
         self.underdog_bonus_weight = underdog_bonus_weight
 
+        self._main_combat_skill = None
+        self._skill_task_embedding = None
+
     def reset(self, obs):
         """Called at the start of each episode"""
         super().reset(obs)
         self._reset_reward_vars()
+        task_name = self.env.agent_task_map[self.agent_id][0].name
+        self._main_combat_skill = self._choose_combat_skill(task_name)
+        skill_embedding = np.array([0, 0, 0], dtype=np.float16)
+        skill_embedding[SKILL_LIST.index(self._main_combat_skill)] = 1
+        self._skill_task_embedding = np.hstack((skill_embedding, obs["Task"]))
+
+    @staticmethod
+    def _choose_combat_skill(task_name):
+        task_name = task_name.lower()
+        # if task_name contains specific skill or item, choose the corresponding skill
+        for hint, skill in TASK_TO_SKILL_MAP.items():
+            if hint in task_name:
+                return skill
+        # otherwise, chooose randomly
+        return np.random.choice(SKILL_LIST)
 
     @property
     def observation_space(self):
         """If you modify the shape of features, you need to specify the new obs space"""
         obs_space = super().observation_space
-        # Add obstacle tile map -- the org obs space is (225, 4)
-        obs_space["Tile"] = gym.spaces.Box(
-          low=-2**15, high=2**15-1, shape=(225, 5), dtype=np.int16)
+        # Add main combat skill (3) to the task embedding
+        task_embed_dim = 3 + obs_space["Task"].shape[0]
+        obs_space["Task"] = gym.spaces.Box(low=-2**15, high=2**15-1, dtype=np.float16,
+                                           shape=(task_embed_dim,))
+        # Add informative tile maps: obstacle, food, water, ammo
+        tile_dim = obs_space["Tile"].shape[1] + 4
+        obs_space["Tile"] = gym.spaces.Box(low=-2**15, high=2**15-1, dtype=np.int16,
+                                           shape=(self.config.MAP_N_OBS, tile_dim))
         return obs_space
 
     def observation(self, obs):
@@ -112,9 +164,18 @@ class Postprocessor(StatPostprocessor):
         Use this to define custom featurizers. Changing the space itself requires you to
         define the observation space again (i.e. Gym.spaces.Dict(gym.spaces....))
         """
+        # Add main combat skill to the task embedding
+        obs["Task"] = self._skill_task_embedding
+
         # Add obstacle tile map to the obs
-        obstacle = np.isin(obs["Tile"][:,2], IMPASSIBLE).astype(np.int16)
-        obs["Tile"] = np.concatenate([obs["Tile"], obstacle[:,None]], axis=1)
+        # TODO: add entity map, update the harvest status -- how much can they help?
+        obstacle = np.isin(obs["Tile"][:,2], IMPASSIBLE)
+        food = obs["Tile"][:,2] == material.Foilage.index
+        water = obs["Tile"][:,2] == material.Water.index
+        ammo = obs["Tile"][:,2] == SKILL_TO_TILE_MAP[self._main_combat_skill]
+        obs["Tile"] = np.concatenate(
+            [obs["Tile"], obstacle[:,None], food[:,None], water[:,None], ammo[:,None]],
+            axis=1).astype(np.int16)
 
         # Mask out the last selected price
         obs["ActionTargets"]["Sell"]["Price"][self._last_price] = 0
@@ -210,7 +271,7 @@ class Postprocessor(StatPostprocessor):
     def _update_reward_vars(self, agent):
         # From the agent
         self._curr_death_fog = self.env.realm.fog_map[agent.pos]
-        max_offense = max(agent.melee_attack, agent.range_attack, agent.mage_attack)
+        max_offense = getattr(agent, self._main_combat_skill + "_attack")
         self._new_max_offense = 0
         if max_offense > self._max_offense:
             self._new_max_offense = 1.0 if self.env.realm.tick > 1 else 0
@@ -230,7 +291,8 @@ class Postprocessor(StatPostprocessor):
                         (log[:, attr_to_col["event"]] == EventCode.GO_FARTHEST)
         self._last_go_farthest = int(sum(last_farthest) > 0)
         last_ammo_idx = (log[:, attr_to_col["tick"]] == self.env.realm.tick) & \
-                        (log[:, attr_to_col["event"]] == EventCode.FIRE_AMMO)
+                        (log[:, attr_to_col["event"]] == EventCode.FIRE_AMMO) & \
+                        (log[:, attr_to_col["item_type"]] == SKILL_TO_AMMO_MAP[self._main_combat_skill])
         self._last_ammo_fire = int(sum(last_ammo_idx) > 0)
         last_kill_idx = (log[:, attr_to_col["tick"]] == self.env.realm.tick) & \
                         (log[:, attr_to_col["event"]] == EventCode.PLAYER_KILL)
@@ -244,4 +306,3 @@ def calculate_entropy(sequence):
         probability = freq / total_elements
         entropy -= probability * math.log2(probability)
     return entropy
-
