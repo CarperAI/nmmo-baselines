@@ -64,7 +64,6 @@ def save_replays(policy_store_dir, save_dir):
             envs.driver_env,
             input_size=args.input_size,
             hidden_size=args.hidden_size,
-            task_size=args.task_size
         )
         return cleanrl.Policy(learner_policy)
 
@@ -174,7 +173,6 @@ def rank_policies(policy_store_dir, eval_curriculum_file, device):
             envs.driver_env,
             input_size=args.input_size,
             hidden_size=args.hidden_size,
-            task_size=args.task_size
         )
         return cleanrl.Policy(learner_policy)
 

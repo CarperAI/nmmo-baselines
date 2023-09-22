@@ -43,6 +43,7 @@ SKILL_TO_TILE_MAP = {
     "range": material.Tree.index,
     "mage": material.Crystal.index,
 }
+BASIC_BONUS_EVENTS = [EventCode.EAT_FOOD, EventCode.DRINK_WATER, EventCode.GO_FARTHEST]
 
 
 #class Config(nmmo.config.Default):
@@ -84,7 +85,9 @@ def make_env_creator(args: Namespace):
                 "eval_mode": args.eval_mode,
                 "detailed_stat": args.detailed_stat,
                 "early_stop_agent_num": args.early_stop_agent_num,
-                "progress_bonus_weight": args.progress_bonus_weight,
+                "basic_bonus_weight": args.basic_bonus_weight,
+                "default_refractory_period": args.default_refractory_period,
+                "death_fog_criteria": args.death_fog_criteria,
                 "meander_bonus_weight": args.meander_bonus_weight,
                 "heal_bonus_weight": args.heal_bonus_weight,
                 "equipment_bonus_weight": args.equipment_bonus_weight,
@@ -101,7 +104,9 @@ class Postprocessor(StatPostprocessor):
         eval_mode=False,
         detailed_stat=False,
         early_stop_agent_num=0,
-        progress_bonus_weight=0,
+        default_refractory_period=8,  # for eat, drink, progress
+        basic_bonus_weight=0,
+        death_fog_criteria=2,
         meander_bonus_weight=0,
         heal_bonus_weight=0,
         equipment_bonus_weight=0,
@@ -112,7 +117,9 @@ class Postprocessor(StatPostprocessor):
     ):
         super().__init__(env, agent_id, eval_mode, detailed_stat, early_stop_agent_num)
         self.config = env.config
-        self.progress_bonus_weight = progress_bonus_weight
+        self.default_refractory_period = default_refractory_period
+        self.basic_bonus_weight = basic_bonus_weight
+        self.death_fog_criteria = death_fog_criteria
         self.meander_bonus_weight = meander_bonus_weight
         self.heal_bonus_weight = heal_bonus_weight
         self.equipment_bonus_weight = equipment_bonus_weight
@@ -199,13 +206,19 @@ class Postprocessor(StatPostprocessor):
             agent = self.env.realm.players[self.agent_id]
             self._update_reward_vars(agent)
 
-            # Add "Progress toward the center" bonus
-            progress_bonus = 0
-            self._farthest_bonus_refractory_period -= 1 if self._farthest_bonus_refractory_period > 0 else 0
-            if self._last_go_farthest > 0 and self._farthest_bonus_refractory_period == 0:
-                progress_bonus = self.progress_bonus_weight
-                # refer to bptt horizon. the bonus is given once at max during each backprop
-                self._farthest_bonus_refractory_period = 8
+            # Process refractory period for eat, drink, progress
+            basic_bonus = 0
+            self._basic_bonus_refractory_period -= 1
+            for idx, event_code in enumerate(BASIC_BONUS_EVENTS):
+                if self._last_basic_events[idx] > 0:
+                    if self._basic_bonus_refractory_period[idx] <= 0:
+                        basic_bonus += self.basic_bonus_weight
+                        self._basic_bonus_refractory_period[idx] = self.default_refractory_period
+
+                    # but in case under the death fog, ignore refractory period and reward running away
+                    if self._curr_death_fog >= self.death_fog_criteria and \
+                       event_code == EventCode.GO_FARTHEST:
+                        basic_bonus += self.meander_bonus_weight  # use meander bonus
 
             # Add meandering bonus to encourage meandering yet moving toward the center
             meander_bonus = 0
@@ -231,8 +244,8 @@ class Postprocessor(StatPostprocessor):
             underdog_bonus = self.underdog_bonus_weight * float(self._last_kill_level > agent.attack_level)
 
             # sum up all the bonuses. Add most of bonus, when the agent is NOT under death fog
-            reward += progress_bonus
-            if self._curr_death_fog < 3:  # under a very light death fog, easy to run away yet
+            reward += basic_bonus
+            if self._curr_death_fog < self.death_fog_criteria:  # no extra bonus under death fog
                 reward += meander_bonus + healing_bonus + equipment_bonus + ammo_fire_bonus +\
                           unique_event_bonus + underdog_bonus
 
@@ -240,10 +253,13 @@ class Postprocessor(StatPostprocessor):
 
     def _reset_reward_vars(self):
         # TODO: check the effectiveness of each bonus
-        # death fog/progress bonus (to avoid death fog and move toward the center)
+        # basic bonuses: eat, drink, progress
+        num_basic_events = len(BASIC_BONUS_EVENTS)
+        self._last_basic_events = np.zeros(num_basic_events, dtype=np.int16)
+        self._basic_bonus_refractory_period = np.zeros(num_basic_events, dtype=np.int16)
+
+        # related to death fog/progress bonus (to avoid death fog and move toward the center)
         self._curr_death_fog = 0
-        self._last_go_farthest = 0  # if the agent broke the farthest record in the last tick
-        self._farthest_bonus_refractory_period = 0
 
         # meander bonus (to prevent entropy collapse)
         self._last_moves = []
@@ -287,15 +303,14 @@ class Postprocessor(StatPostprocessor):
         attr_to_col = self.env.realm.event_log.attr_to_col
         self._prev_unique_count = self._curr_unique_count
         self._curr_unique_count = len(extract_unique_event(log, self.env.realm.event_log.attr_to_col))
-        last_farthest = (log[:, attr_to_col["tick"]] == self.env.realm.tick) & \
-                        (log[:, attr_to_col["event"]] == EventCode.GO_FARTHEST)
-        self._last_go_farthest = int(sum(last_farthest) > 0)
-        last_ammo_idx = (log[:, attr_to_col["tick"]] == self.env.realm.tick) & \
-                        (log[:, attr_to_col["event"]] == EventCode.FIRE_AMMO) & \
+        curr_tick = log[:, attr_to_col["tick"]] == self.env.realm.tick
+        for idx, event_code in enumerate(BASIC_BONUS_EVENTS):
+            event_idx = curr_tick & (log[:, attr_to_col["event"]] == event_code)
+            self._last_basic_events[idx] = int(sum(event_idx) > 0)
+        last_ammo_idx = curr_tick & (log[:, attr_to_col["event"]] == EventCode.FIRE_AMMO) & \
                         (log[:, attr_to_col["item_type"]] == SKILL_TO_AMMO_MAP[self._main_combat_skill])
         self._last_ammo_fire = int(sum(last_ammo_idx) > 0)
-        last_kill_idx = (log[:, attr_to_col["tick"]] == self.env.realm.tick) & \
-                        (log[:, attr_to_col["event"]] == EventCode.PLAYER_KILL)
+        last_kill_idx = curr_tick & (log[:, attr_to_col["event"]] == EventCode.PLAYER_KILL)
         self._last_kill_level = max(log[last_kill_idx, attr_to_col["level"]]) if sum(last_kill_idx) > 0 else 0
 
 def calculate_entropy(sequence):
