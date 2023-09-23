@@ -86,7 +86,8 @@ def make_env_creator(args: Namespace):
                 "detailed_stat": args.detailed_stat,
                 "early_stop_agent_num": args.early_stop_agent_num,
                 "basic_bonus_weight": args.basic_bonus_weight,
-                "basic_bonus_refractory_period": args.basic_bonus_refractory_period,
+                "progress_bonus_refractory_period": args.progress_bonus_refractory_period,
+                "resource_bonus_refractory_period": args.resource_bonus_refractory_period,
                 "death_fog_criteria": args.death_fog_criteria,
                 "meander_bonus_weight": args.meander_bonus_weight,
                 "heal_bonus_weight": args.heal_bonus_weight,
@@ -104,8 +105,9 @@ class Postprocessor(StatPostprocessor):
         eval_mode=False,
         detailed_stat=False,
         early_stop_agent_num=0,
-        basic_bonus_refractory_period=4,  # for eat, drink, progress
         basic_bonus_weight=0,
+        progress_bonus_refractory_period=4,
+        resource_bonus_refractory_period=8,  # for eat, drink
         death_fog_criteria=2,
         meander_bonus_weight=0,
         heal_bonus_weight=0,
@@ -117,8 +119,9 @@ class Postprocessor(StatPostprocessor):
     ):
         super().__init__(env, agent_id, eval_mode, detailed_stat, early_stop_agent_num)
         self.config = env.config
-        self.basic_bonus_refractory_period = basic_bonus_refractory_period
         self.basic_bonus_weight = basic_bonus_weight
+        self.progress_bonus_refractory_period = progress_bonus_refractory_period
+        self.resource_bonus_refractory_period = resource_bonus_refractory_period
         self.death_fog_criteria = death_fog_criteria
         self.meander_bonus_weight = meander_bonus_weight
         self.heal_bonus_weight = heal_bonus_weight
@@ -213,7 +216,10 @@ class Postprocessor(StatPostprocessor):
                 if self._last_basic_events[idx] > 0:
                     if self._basic_bonus_refractory_period[idx] <= 0:
                         basic_bonus += self.basic_bonus_weight
-                        self._basic_bonus_refractory_period[idx] = self.basic_bonus_refractory_period
+                        if event_code == EventCode.GO_FARTHEST:
+                            self._basic_bonus_refractory_period[idx] = self.progress_bonus_refractory_period
+                        else:  # for eat food and drink water
+                            self._basic_bonus_refractory_period[idx] = self.resource_bonus_refractory_period
 
                     # but in case under the death fog, ignore refractory period and reward running away
                     if self._curr_death_fog >= self.death_fog_criteria and \
