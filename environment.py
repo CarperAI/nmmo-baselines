@@ -86,7 +86,7 @@ def make_env_creator(args: Namespace):
                 "detailed_stat": args.detailed_stat,
                 "early_stop_agent_num": args.early_stop_agent_num,
                 "basic_bonus_weight": args.basic_bonus_weight,
-                "default_refractory_period": args.default_refractory_period,
+                "basic_bonus_refractory_period": args.basic_bonus_refractory_period,
                 "death_fog_criteria": args.death_fog_criteria,
                 "meander_bonus_weight": args.meander_bonus_weight,
                 "heal_bonus_weight": args.heal_bonus_weight,
