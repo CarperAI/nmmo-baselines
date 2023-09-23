@@ -104,7 +104,7 @@ class Postprocessor(StatPostprocessor):
         eval_mode=False,
         detailed_stat=False,
         early_stop_agent_num=0,
-        default_refractory_period=8,  # for eat, drink, progress
+        basic_bonus_refractory_period=4,  # for eat, drink, progress
         basic_bonus_weight=0,
         death_fog_criteria=2,
         meander_bonus_weight=0,
@@ -117,7 +117,7 @@ class Postprocessor(StatPostprocessor):
     ):
         super().__init__(env, agent_id, eval_mode, detailed_stat, early_stop_agent_num)
         self.config = env.config
-        self.default_refractory_period = default_refractory_period
+        self.basic_bonus_refractory_period = basic_bonus_refractory_period
         self.basic_bonus_weight = basic_bonus_weight
         self.death_fog_criteria = death_fog_criteria
         self.meander_bonus_weight = meander_bonus_weight
@@ -213,7 +213,7 @@ class Postprocessor(StatPostprocessor):
                 if self._last_basic_events[idx] > 0:
                     if self._basic_bonus_refractory_period[idx] <= 0:
                         basic_bonus += self.basic_bonus_weight
-                        self._basic_bonus_refractory_period[idx] = self.default_refractory_period
+                        self._basic_bonus_refractory_period[idx] = self.basic_bonus_refractory_period
 
                     # but in case under the death fog, ignore refractory period and reward running away
                     if self._curr_death_fog >= self.death_fog_criteria and \

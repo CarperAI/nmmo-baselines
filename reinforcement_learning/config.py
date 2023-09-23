@@ -55,7 +55,7 @@ class Config:
 
     # Reward Args
     basic_bonus_weight = 0.03
-    default_refractory_period = 8
+    basic_bonus_refractory_period = 4
     death_fog_criteria = 2
     meander_bonus_weight = 0.01
     heal_bonus_weight = 0  # covered by basic eat/drink bonus?
