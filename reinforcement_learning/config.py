@@ -59,10 +59,10 @@ class Config:
     resource_bonus_refractory_period = 8  # for food and water
     death_fog_criteria = 2
     meander_bonus_weight = 0.01
-    heal_bonus_weight = 0  # covered by basic eat/drink bonus?
-    equipment_bonus_weight = 0  #0.02
-    ammofire_bonus_weight = 0  #0.01
-    unique_event_bonus_weight = 0  #0.01
+    heal_bonus_weight = 0.01  # covered by basic eat/drink bonus?
+    equipment_bonus_weight = 0.  #0.02
+    ammofire_bonus_weight = 0.  #0.01
+    unique_event_bonus_weight = 0.  #0.01
 
     # Policy Args
     input_size = 256
