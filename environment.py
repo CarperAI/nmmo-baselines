@@ -222,8 +222,7 @@ class Postprocessor(StatPostprocessor):
                             self._basic_bonus_refractory_period[idx] = self.resource_bonus_refractory_period
 
                     # but in case under the death fog, ignore refractory period and reward running away
-                    if self._curr_death_fog >= self.death_fog_criteria and \
-                       event_code == EventCode.GO_FARTHEST:
+                    if self._curr_death_fog > 0 and event_code == EventCode.GO_FARTHEST:
                         basic_bonus += self.meander_bonus_weight  # use meander bonus
 
             # Add meandering bonus to encourage meandering yet moving toward the center
@@ -232,8 +231,11 @@ class Postprocessor(StatPostprocessor):
               move_entropy = calculate_entropy(self._last_moves[-8:])  # of last 8 moves
               meander_bonus += self.meander_bonus_weight * (move_entropy - 1)
 
-            # Add "Healing" score based on health increase and decrease due to food and water
-            healing_bonus = self.heal_bonus_weight * float(agent.resources.health_restore > 0)
+            # Add "Healing" score based on health increase (due to food and water, or potion)
+            # Using potion will give a big bonus
+            healing_bonus = 0
+            if agent.resources.health_restore > 0:  # 10 in case of food/water, 50+ for potion
+                healing_bonus = self.heal_bonus_weight * agent.resources.health_restore
 
             # Add combat attribute bonus to encourage leveling up offense/defense
             equipment_bonus = self.equipment_bonus_weight * (self._new_max_offense + self._new_max_defense)
