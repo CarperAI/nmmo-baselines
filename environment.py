@@ -85,12 +85,13 @@ def make_env_creator(args: Namespace):
                 "eval_mode": args.eval_mode,
                 "detailed_stat": args.detailed_stat,
                 "early_stop_agent_num": args.early_stop_agent_num,
+                "survival_mode_criteria": args.survival_mode_criteria,
+                "death_fog_criteria": args.death_fog_criteria,
+                "survival_bonus_weight": args.survival_bonus_weight,
                 "basic_bonus_weight": args.basic_bonus_weight,
                 "progress_bonus_refractory_period": args.progress_bonus_refractory_period,
                 "resource_bonus_refractory_period": args.resource_bonus_refractory_period,
-                "death_fog_criteria": args.death_fog_criteria,
                 "meander_bonus_weight": args.meander_bonus_weight,
-                "heal_bonus_weight": args.heal_bonus_weight,
                 "equipment_bonus_weight": args.equipment_bonus_weight,
                 "ammofire_bonus_weight": args.ammofire_bonus_weight,
                 "unique_event_bonus_weight": args.unique_event_bonus_weight,
@@ -105,12 +106,13 @@ class Postprocessor(StatPostprocessor):
         eval_mode=False,
         detailed_stat=False,
         early_stop_agent_num=0,
+        survival_mode_criteria=30,
+        death_fog_criteria=1,
+        survival_bonus_weight=0,
         basic_bonus_weight=0,
         progress_bonus_refractory_period=4,
         resource_bonus_refractory_period=8,  # for eat, drink
-        death_fog_criteria=2,
         meander_bonus_weight=0,
-        heal_bonus_weight=0,
         equipment_bonus_weight=0,
         ammofire_bonus_weight=0,
         unique_event_bonus_weight=0,
@@ -119,12 +121,13 @@ class Postprocessor(StatPostprocessor):
     ):
         super().__init__(env, agent_id, eval_mode, detailed_stat, early_stop_agent_num)
         self.config = env.config
+        self.survival_mode_criteria = survival_mode_criteria  # for health, food, water
+        self.death_fog_criteria = death_fog_criteria
+        self.survival_bonus_weight = survival_bonus_weight
         self.basic_bonus_weight = basic_bonus_weight
         self.progress_bonus_refractory_period = progress_bonus_refractory_period
         self.resource_bonus_refractory_period = resource_bonus_refractory_period
-        self.death_fog_criteria = death_fog_criteria
         self.meander_bonus_weight = meander_bonus_weight
-        self.heal_bonus_weight = heal_bonus_weight
         self.equipment_bonus_weight = equipment_bonus_weight
         self.ammofire_bonus_weight = ammofire_bonus_weight
         self.unique_event_bonus_weight = unique_event_bonus_weight
@@ -209,8 +212,19 @@ class Postprocessor(StatPostprocessor):
             agent = self.env.realm.players[self.agent_id]
             self._update_reward_vars(agent)
 
-            # Process refractory period for eat, drink, progress
             basic_bonus = 0
+            # Survival bonus: eat when starve, drink when dehydrate, run away from death fog
+            if self._last_food_level <= self.survival_mode_criteria and \
+               self._curr_food_level > self.survival_mode_criteria:  # eat food or use ration when starve
+                basic_bonus += self.survival_bonus_weight * (self._curr_food_level - self._last_food_level)
+            if self._last_water_level <= self.survival_mode_criteria and \
+               self._curr_water_level > self.survival_mode_criteria:  # drink water or use ration when dehydrate
+                basic_bonus += self.survival_bonus_weight * (self._curr_water_level - self._last_water_level)
+            # Always reward health increase
+            if agent.resources.health_restore > 5:  # 10 in case of food/water, 50+ for potion
+                basic_bonus += self.survival_bonus_weight * agent.resources.health_restore
+
+            # Process refractory period for eat, drink, progress
             self._basic_bonus_refractory_period -= 1
             for idx, event_code in enumerate(BASIC_BONUS_EVENTS):
                 if self._last_basic_events[idx] > 0:
@@ -225,17 +239,11 @@ class Postprocessor(StatPostprocessor):
                     if self._curr_death_fog > 0 and event_code == EventCode.GO_FARTHEST:
                         basic_bonus += self.meander_bonus_weight  # use meander bonus
 
-            # Add meandering bonus to encourage meandering yet moving toward the center
+            # Add meandering bonus to encourage meandering (to prevent entropy collapse)
             meander_bonus = 0
             if len(self._last_moves) > 5:
               move_entropy = calculate_entropy(self._last_moves[-8:])  # of last 8 moves
               meander_bonus += self.meander_bonus_weight * (move_entropy - 1)
-
-            # Add "Healing" score based on health increase (due to food and water, or potion)
-            # Using potion will give a big bonus
-            healing_bonus = 0
-            if agent.resources.health_restore > 0:  # 10 in case of food/water, 50+ for potion
-                healing_bonus = self.heal_bonus_weight * agent.resources.health_restore
 
             # Add combat attribute bonus to encourage leveling up offense/defense
             equipment_bonus = self.equipment_bonus_weight * (self._new_max_offense + self._new_max_defense)
@@ -251,23 +259,29 @@ class Postprocessor(StatPostprocessor):
             # Add "Underdog" bonus to encourage attacking higher level agents
             underdog_bonus = self.underdog_bonus_weight * float(self._last_kill_level > agent.attack_level)
 
-            # sum up all the bonuses. Add most of bonus, when the agent is NOT under death fog
+            # Sum up all the bonuses. Under the survival mode, ignore other bonuses than the basic bonus
             reward += basic_bonus
-            if self._curr_death_fog < self.death_fog_criteria:  # no extra bonus under death fog
-                reward += meander_bonus + healing_bonus + equipment_bonus + ammo_fire_bonus +\
-                          unique_event_bonus + underdog_bonus
+            if not self._survival_mode:
+                reward += meander_bonus + equipment_bonus + ammo_fire_bonus + unique_event_bonus + underdog_bonus
 
         return reward, done, info
 
     def _reset_reward_vars(self):
         # TODO: check the effectiveness of each bonus
-        # basic bonuses: eat, drink, progress
+        # highest priority: eat when starve, drink when dehydrate, run away from death fog
+        self._last_health_level = 100
+        self._curr_health_level = 100
+        self._last_food_level = 100
+        self._curr_food_level = 100
+        self._last_water_level = 100
+        self._curr_water_level = 100
+        self._curr_death_fog = 0
+        self._survival_mode = False
+
+        # basic bonuses: generally encourage eat, drink, progress, but not too much (refractory period)
         num_basic_events = len(BASIC_BONUS_EVENTS)
         self._last_basic_events = np.zeros(num_basic_events, dtype=np.int16)
         self._basic_bonus_refractory_period = np.zeros(num_basic_events, dtype=np.int16)
-
-        # related to death fog/progress bonus (to avoid death fog and move toward the center)
-        self._curr_death_fog = 0
 
         # meander bonus (to prevent entropy collapse)
         self._last_moves = []
@@ -294,7 +308,18 @@ class Postprocessor(StatPostprocessor):
 
     def _update_reward_vars(self, agent):
         # From the agent
+        self._last_health_level = self._curr_health_level
+        self._curr_health_level = agent.resources.health.val
+        self._last_food_level = self._curr_food_level
+        self._curr_food_level = agent.resources.food.val
+        self._last_water_level = self._curr_water_level
+        self._curr_water_level = agent.resources.water.val
         self._curr_death_fog = self.env.realm.fog_map[agent.pos]
+        self._survival_mode = True if min(self._last_health_level,
+                                          self._last_food_level,
+                                          self._last_water_level) <= self.survival_mode_criteria or \
+                                      self._curr_death_fog >= self.death_fog_criteria \
+                                    else False
         max_offense = getattr(agent, self._main_combat_skill + "_attack")
         self._new_max_offense = 0
         if max_offense > self._max_offense:
