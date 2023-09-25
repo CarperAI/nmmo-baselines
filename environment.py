@@ -88,9 +88,7 @@ def make_env_creator(args: Namespace):
                 "survival_mode_criteria": args.survival_mode_criteria,
                 "death_fog_criteria": args.death_fog_criteria,
                 "survival_bonus_weight": args.survival_bonus_weight,
-                "basic_bonus_weight": args.basic_bonus_weight,
-                "progress_bonus_refractory_period": args.progress_bonus_refractory_period,
-                "resource_bonus_refractory_period": args.resource_bonus_refractory_period,
+                "progress_bonus_weight": args.progress_bonus_weight,
                 "meander_bonus_weight": args.meander_bonus_weight,
                 "equipment_bonus_weight": args.equipment_bonus_weight,
                 "ammofire_bonus_weight": args.ammofire_bonus_weight,
@@ -109,9 +107,7 @@ class Postprocessor(StatPostprocessor):
         survival_mode_criteria=30,
         death_fog_criteria=1,
         survival_bonus_weight=0,
-        basic_bonus_weight=0,
-        progress_bonus_refractory_period=4,
-        resource_bonus_refractory_period=8,  # for eat, drink
+        progress_bonus_weight=0,
         meander_bonus_weight=0,
         equipment_bonus_weight=0,
         ammofire_bonus_weight=0,
@@ -124,9 +120,7 @@ class Postprocessor(StatPostprocessor):
         self.survival_mode_criteria = survival_mode_criteria  # for health, food, water
         self.death_fog_criteria = death_fog_criteria
         self.survival_bonus_weight = survival_bonus_weight
-        self.basic_bonus_weight = basic_bonus_weight
-        self.progress_bonus_refractory_period = progress_bonus_refractory_period
-        self.resource_bonus_refractory_period = resource_bonus_refractory_period
+        self.progress_bonus_weight = progress_bonus_weight
         self.meander_bonus_weight = meander_bonus_weight
         self.equipment_bonus_weight = equipment_bonus_weight
         self.ammofire_bonus_weight = ammofire_bonus_weight
@@ -136,6 +130,13 @@ class Postprocessor(StatPostprocessor):
 
         self._main_combat_skill = None
         self._skill_task_embedding = None
+
+        # dist map should not change from episode to episode
+        self._dist_map = np.zeros((self.config.MAP_SIZE, self.config.MAP_SIZE), dtype=np.int16)
+        center = self.config.MAP_SIZE // 2
+        for i in range(center):
+            l, r = i, self.config.MAP_SIZE - i
+            self._dist_map[l:r, l:r] = center - i - 1
 
     def reset(self, obs):
         """Called at the start of each episode"""
@@ -164,8 +165,8 @@ class Postprocessor(StatPostprocessor):
         combat_dim = 3 + obs_space["CombatAttr"].shape[0]
         obs_space["CombatAttr"] = gym.spaces.Box(low=-2**15, high=2**15-1, dtype=np.int16,
                                            shape=(combat_dim,))
-        # Add informative tile maps: obstacle, food, water, ammo
-        tile_dim = obs_space["Tile"].shape[1] + 4
+        # Add informative tile maps: dist, obstacle, food, water, ammo
+        tile_dim = obs_space["Tile"].shape[1] + 5
         obs_space["Tile"] = gym.spaces.Box(low=-2**15, high=2**15-1, dtype=np.int16,
                                            shape=(self.config.MAP_N_OBS, tile_dim))
         return obs_space
@@ -182,12 +183,13 @@ class Postprocessor(StatPostprocessor):
 
         # Add obstacle tile map to the obs
         # TODO: add entity map, update the harvest status -- how much can they help?
+        dist = self._dist_map[obs["Tile"][:,0], obs["Tile"][:,1]]
         obstacle = np.isin(obs["Tile"][:,2], IMPASSIBLE)
         food = obs["Tile"][:,2] == material.Foilage.index
         water = obs["Tile"][:,2] == material.Water.index
         ammo = obs["Tile"][:,2] == SKILL_TO_TILE_MAP[self._main_combat_skill]
         obs["Tile"] = np.concatenate(
-            [obs["Tile"], obstacle[:,None], food[:,None], water[:,None], ammo[:,None]],
+            [obs["Tile"], dist[:,None], obstacle[:,None], food[:,None], water[:,None], ammo[:,None]],
             axis=1).astype(np.int16)
 
         # Mask out the last selected price
@@ -220,24 +222,27 @@ class Postprocessor(StatPostprocessor):
             if self._last_water_level <= self.survival_mode_criteria and \
                self._curr_water_level > self.survival_mode_criteria:  # drink water or use ration when dehydrate
                 basic_bonus += self.survival_bonus_weight * (self._curr_water_level - self._last_water_level)
-            # Always reward health increase
-            if agent.resources.health_restore > 5:  # 10 in case of food/water, 50+ for potion
+            if self._last_health_level <= self.survival_mode_criteria and \
+               agent.resources.health_restore > 5:
+                # 10 in case of enough food/water, 50+ for potion
                 basic_bonus += self.survival_bonus_weight * agent.resources.health_restore
 
-            # Process refractory period for eat, drink, progress
-            self._basic_bonus_refractory_period -= 1
+            # Progress bonuses: eat & progress, drink & progress, run away from the death fog
+            progress_bonus = 0
             for idx, event_code in enumerate(BASIC_BONUS_EVENTS):
                 if self._last_basic_events[idx] > 0:
-                    if self._basic_bonus_refractory_period[idx] <= 0:
-                        basic_bonus += self.basic_bonus_weight
-                        if event_code == EventCode.GO_FARTHEST:
-                            self._basic_bonus_refractory_period[idx] = self.progress_bonus_refractory_period
-                        else:  # for eat food and drink water
-                            self._basic_bonus_refractory_period[idx] = self.resource_bonus_refractory_period
-
-                    # but in case under the death fog, ignore refractory period and reward running away
-                    if self._curr_death_fog > 0 and event_code == EventCode.GO_FARTHEST:
-                        basic_bonus += self.meander_bonus_weight  # use meander bonus
+                    curr_dist = self._dist_map[agent.pos]
+                    # progress and eat
+                    if event_code == EventCode.EAT_FOOD and curr_dist < self._last_eat_dist:
+                        progress_bonus += self.progress_bonus_weight
+                        self._last_eat_dist = curr_dist
+                    # progress and drink
+                    if event_code == EventCode.DRINK_WATER and curr_dist < self._last_drink_dist:
+                        progress_bonus += self.progress_bonus_weight
+                        self._last_drink_dist = curr_dist
+                    # run away from death fog
+                    if event_code == EventCode.GO_FARTHEST and self._curr_death_fog > 0:
+                        progress_bonus += self.meander_bonus_weight # use meander bonus
 
             # Add meandering bonus to encourage meandering (to prevent entropy collapse)
             meander_bonus = 0
@@ -260,7 +265,7 @@ class Postprocessor(StatPostprocessor):
             underdog_bonus = self.underdog_bonus_weight * float(self._last_kill_level > agent.attack_level)
 
             # Sum up all the bonuses. Under the survival mode, ignore other bonuses than the basic bonus
-            reward += basic_bonus
+            reward += basic_bonus + progress_bonus
             if not self._survival_mode:
                 reward += meander_bonus + equipment_bonus + ammo_fire_bonus + unique_event_bonus + underdog_bonus
 
@@ -278,10 +283,12 @@ class Postprocessor(StatPostprocessor):
         self._curr_death_fog = 0
         self._survival_mode = False
 
-        # basic bonuses: generally encourage eat, drink, progress, but not too much (refractory period)
+        # progress bonuses: eat & progress, drink & progress, run away from the death fog
+        # (reward when agents eat/drink the farthest so far)
         num_basic_events = len(BASIC_BONUS_EVENTS)
         self._last_basic_events = np.zeros(num_basic_events, dtype=np.int16)
-        self._basic_bonus_refractory_period = np.zeros(num_basic_events, dtype=np.int16)
+        self._last_eat_dist = np.inf
+        self._last_drink_dist = np.inf
 
         # meander bonus (to prevent entropy collapse)
         self._last_moves = []

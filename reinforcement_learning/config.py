@@ -54,12 +54,10 @@ class Config:
     early_stop_agent_num = 8  # Stop the episode when the number of agents reaches this number
 
     # Reward Args
-    survival_mode_criteria = 30  # for health, food, water level
+    survival_mode_criteria = 35  # for health, food, water level
     death_fog_criteria = 1  # fog damage
     survival_bonus_weight = 0.001  # * diff health/food/water level (max: 100)
-    basic_bonus_weight = 0.03
-    progress_bonus_refractory_period = 3
-    resource_bonus_refractory_period = 7  # for food and water
+    progress_bonus_weight = 0.05
     meander_bonus_weight = 0.01
     equipment_bonus_weight = 0.  #0.02
     ammofire_bonus_weight = 0.  #0.01
