@@ -89,6 +89,7 @@ def make_env_creator(args: Namespace):
                 "death_fog_criteria": args.death_fog_criteria,
                 "survival_bonus_weight": args.survival_bonus_weight,
                 "progress_bonus_weight": args.progress_bonus_weight,
+                "get_resource_weight": args.get_resource_weight,
                 "meander_bonus_weight": args.meander_bonus_weight,
                 "equipment_bonus_weight": args.equipment_bonus_weight,
                 "ammofire_bonus_weight": args.ammofire_bonus_weight,
