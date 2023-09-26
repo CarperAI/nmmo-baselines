@@ -42,7 +42,7 @@ class Config:
 
     # Environment Args
     num_agents = 64  # Number of agents to use for training
-    num_npcs = 0  # Number of NPCs to use for training
+    num_npcs = 256  # Number of NPCs to use for training
     max_episode_length = 1024  # Number of steps per episode
     num_maps = 128  # Number of maps to use for training
     maps_path = "maps/train/"  # Path to maps to use for training
@@ -61,9 +61,9 @@ class Config:
     progress_bonus_weight = 0.05
     get_resource_weight = 0.03
     meander_bonus_weight = 0.01
-    equipment_bonus_weight = 0.  #0.02
-    ammofire_bonus_weight = 0.  #0.01
-    unique_event_bonus_weight = 0.  #0.01
+    equipment_bonus_weight = 0.02
+    ammofire_bonus_weight = 0.01
+    unique_event_bonus_weight = 0.  # .01
 
     # Policy Args
     input_size = 256
