@@ -12,9 +12,11 @@ import nmmo
 from nmmo.lib import material
 from nmmo.lib.log import EventCode
 import nmmo.systems.item as Item
+from nmmo.entity.entity import EntityState
 
 from leader_board import StatPostprocessor, extract_unique_event
 
+EntityAttr = EntityState.State.attr_name_to_col
 IMPASSIBLE = list(material.Impassible.indices)
 
 # We can use the following mapping from task name (skill/item name as arg) to profession
@@ -91,8 +93,9 @@ def make_env_creator(args: Namespace):
                 "progress_bonus_weight": args.progress_bonus_weight,
                 "get_resource_weight": args.get_resource_weight,
                 "meander_bonus_weight": args.meander_bonus_weight,
+                "combat_bonus_weight": args.combat_bonus_weight,
                 "equipment_bonus_weight": args.equipment_bonus_weight,
-                "ammofire_bonus_weight": args.ammofire_bonus_weight,
+                #"ammofire_bonus_weight": args.ammofire_bonus_weight,
                 "unique_event_bonus_weight": args.unique_event_bonus_weight,
                 #"underdog_bonus_weight": args.underdog_bonus_weight,
             },
@@ -112,8 +115,9 @@ class Postprocessor(StatPostprocessor):
         progress_bonus_weight=0,
         get_resource_weight=0,
         meander_bonus_weight=0,
+        combat_bonus_weight=0,
         equipment_bonus_weight=0,
-        ammofire_bonus_weight=0,
+        #ammofire_bonus_weight=0,
         unique_event_bonus_weight=0,
         clip_unique_event=3,
         underdog_bonus_weight = 0,
@@ -127,8 +131,9 @@ class Postprocessor(StatPostprocessor):
         self.progress_bonus_weight = progress_bonus_weight
         self.get_resource_weight = get_resource_weight
         self.meander_bonus_weight = meander_bonus_weight
+        self.combat_bonus_weight = combat_bonus_weight
         self.equipment_bonus_weight = equipment_bonus_weight
-        self.ammofire_bonus_weight = ammofire_bonus_weight
+        #self.ammofire_bonus_weight = ammofire_bonus_weight
         self.unique_event_bonus_weight = unique_event_bonus_weight
         self.clip_unique_event = clip_unique_event
         self.underdog_bonus_weight = underdog_bonus_weight
@@ -142,6 +147,9 @@ class Postprocessor(StatPostprocessor):
         for i in range(center):
             l, r = i, self.config.MAP_SIZE - i
             self._dist_map[l:r, l:r] = center - i - 1
+
+        # placeholder for the entity map
+        self._entity_map = np.zeros((self.config.MAP_SIZE, self.config.MAP_SIZE), dtype=np.int16)
 
     def reset(self, obs):
         """Called at the start of each episode"""
@@ -170,8 +178,8 @@ class Postprocessor(StatPostprocessor):
         combat_dim = 3 + obs_space["CombatAttr"].shape[0]
         obs_space["CombatAttr"] = gym.spaces.Box(low=-2**15, high=2**15-1, dtype=np.int16,
                                            shape=(combat_dim,))
-        # Add informative tile maps: dist, obstacle, food, water, ammo
-        tile_dim = obs_space["Tile"].shape[1] + 5
+        # Add informative tile maps: dist, obstacle, food, water, ammo, target
+        tile_dim = obs_space["Tile"].shape[1] + 6
         obs_space["Tile"] = gym.spaces.Box(low=-2**15, high=2**15-1, dtype=np.int16,
                                            shape=(self.config.MAP_N_OBS, tile_dim))
         return obs_space
@@ -186,21 +194,38 @@ class Postprocessor(StatPostprocessor):
         self._combat_embedding[3:] = obs["CombatAttr"]
         obs["CombatAttr"] = self._combat_embedding
 
-        # Add obstacle tile map to the obs
-        # TODO: add entity map, update the harvest status -- how much can they help?
+        # Map entities to the tile map
+        self._update_target_map(obs)
+        target = self._entity_map[obs["Tile"][:,0], obs["Tile"][:,1]]
+
+        # TODO: update the harvest status?
         dist = self._dist_map[obs["Tile"][:,0], obs["Tile"][:,1]]
         obstacle = np.isin(obs["Tile"][:,2], IMPASSIBLE)
         food = obs["Tile"][:,2] == material.Foilage.index
         water = obs["Tile"][:,2] == material.Water.index
         ammo = obs["Tile"][:,2] == SKILL_TO_TILE_MAP[self._main_combat_skill]
         obs["Tile"] = np.concatenate(
-            [obs["Tile"], dist[:,None], obstacle[:,None], food[:,None], water[:,None], ammo[:,None]],
+            [obs["Tile"], dist[:,None], obstacle[:,None], food[:,None], water[:,None], ammo[:,None], target[:,None]],
             axis=1).astype(np.int16)
 
         # Mask out the last selected price
         obs["ActionTargets"]["Sell"]["Price"][self._last_price] = 0
 
         return obs
+
+    def _update_target_map(self, obs):
+        self._entity_map[:] = 0
+        entity_idx = obs["Entity"][:, EntityAttr["id"]] != 0
+        cannot_attack_player = True if self.config.COMBAT_SPAWN_IMMUNITY >= self.env.realm.tick else False
+        for entity in obs["Entity"][entity_idx]:
+            if entity[EntityAttr["id"]] == self.agent_id or \
+               entity[EntityAttr["id"]] > 0 and cannot_attack_player is True:
+                continue
+            combat_level = max(entity[EntityAttr["melee_level"]],
+                               entity[EntityAttr["range_level"]],
+                               entity[EntityAttr["mage_level"]])
+            self._entity_map[entity[EntityAttr["row"]], entity[EntityAttr["col"]]] = \
+                max(combat_level, self._entity_map[entity[EntityAttr["row"]], entity[EntityAttr["col"]]])
 
     def action(self, action):
         """Called before actions are passed from the model to the environment"""
@@ -263,11 +288,14 @@ class Postprocessor(StatPostprocessor):
               move_entropy = calculate_entropy(self._last_moves[-8:])  # of last 8 moves
               meander_bonus += self.meander_bonus_weight * (move_entropy - 1)
 
+            # Add combat bonus to encourage combat activities that increase exp
+            combat_bonus = self.combat_bonus_weight * (self._curr_combat_exp - self._last_combat_exp)
+
             # Add combat attribute bonus to encourage leveling up offense/defense
             equipment_bonus = self.equipment_bonus_weight * (self._new_max_offense + self._new_max_defense)
 
             # Add ammo fire bonus to encourage using ammo
-            ammo_fire_bonus = self.ammofire_bonus_weight * self._last_ammo_fire
+            #ammo_fire_bonus = self.ammofire_bonus_weight * self._last_ammo_fire
 
             # Unique event-based rewards, similar to exploration bonus
             # The number of unique events are available in self._curr_unique_count, self._prev_unique_count
@@ -280,7 +308,7 @@ class Postprocessor(StatPostprocessor):
             # Sum up all the bonuses. Under the survival mode, ignore other bonuses than the basic bonus
             reward += survival_bonus + progress_bonus
             if not self._survival_mode:
-                reward += meander_bonus + equipment_bonus + ammo_fire_bonus + unique_event_bonus + underdog_bonus
+                reward += meander_bonus + equipment_bonus + combat_bonus + unique_event_bonus + underdog_bonus
 
         return reward, done, info
 
@@ -307,8 +335,9 @@ class Postprocessor(StatPostprocessor):
         self._last_moves = []
         self._last_price = 0  # to encourage changing price
 
-        # healing bonus (to encourage eating food and drinking water)
-        # NOTE: no separate reward var necessary, provided by the env
+        # main combat exp
+        self._last_combat_exp = 0
+        self._curr_combat_exp = 0
 
         # equipment, ammo-fire bonus (to level up offense/defense/ammo of the profession)
         # TODO: reward only the relevant profession
@@ -340,6 +369,9 @@ class Postprocessor(StatPostprocessor):
                                           self._last_water_level) <= self.survival_mode_criteria or \
                                       self._curr_death_fog >= self.death_fog_criteria \
                                     else False
+
+        self._last_combat_exp = self._curr_combat_exp
+        self._curr_combat_exp = getattr(agent.skills, self._main_combat_skill).exp.val
         max_offense = getattr(agent, self._main_combat_skill + "_attack")
         self._new_max_offense = 0
         if max_offense > self._max_offense:
