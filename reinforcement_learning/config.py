@@ -54,6 +54,7 @@ class Config:
     early_stop_agent_num = 8  # Stop the episode when the number of agents reaches this number
 
     # Reward Args
+    only_use_main_skill = True
     survival_mode_criteria = 35  # for health, food, water level
     get_resource_criteria = 75  # for food and water
     death_fog_criteria = 1  # fog damage

@@ -45,6 +45,11 @@ SKILL_TO_TILE_MAP = {
     "range": material.Tree.index,
     "mage": material.Crystal.index,
 }
+SKILL_TO_MASK = {
+    "melee": np.array([1, 0, 0], dtype=np.int8),
+    "range": np.array([0, 1, 0], dtype=np.int8),
+    "mage": np.array([0, 0, 1], dtype=np.int8),
+}
 BASIC_BONUS_EVENTS = [EventCode.EAT_FOOD, EventCode.DRINK_WATER, EventCode.GO_FARTHEST]
 
 
@@ -87,6 +92,7 @@ def make_env_creator(args: Namespace):
                 "eval_mode": args.eval_mode,
                 "detailed_stat": args.detailed_stat,
                 "early_stop_agent_num": args.early_stop_agent_num,
+                "only_use_main_skill": args.only_use_main_skill,
                 "survival_mode_criteria": args.survival_mode_criteria,
                 "death_fog_criteria": args.death_fog_criteria,
                 "survival_bonus_weight": args.survival_bonus_weight,
@@ -95,7 +101,6 @@ def make_env_creator(args: Namespace):
                 "meander_bonus_weight": args.meander_bonus_weight,
                 "combat_bonus_weight": args.combat_bonus_weight,
                 "equipment_bonus_weight": args.equipment_bonus_weight,
-                #"ammofire_bonus_weight": args.ammofire_bonus_weight,
                 "unique_event_bonus_weight": args.unique_event_bonus_weight,
                 #"underdog_bonus_weight": args.underdog_bonus_weight,
             },
@@ -108,6 +113,7 @@ class Postprocessor(StatPostprocessor):
         eval_mode=False,
         detailed_stat=False,
         early_stop_agent_num=0,
+        only_use_main_skill=False,
         survival_mode_criteria=35,
         get_resource_criteria=70,
         death_fog_criteria=1,
@@ -117,7 +123,6 @@ class Postprocessor(StatPostprocessor):
         meander_bonus_weight=0,
         combat_bonus_weight=0,
         equipment_bonus_weight=0,
-        #ammofire_bonus_weight=0,
         unique_event_bonus_weight=0,
         clip_unique_event=3,
         underdog_bonus_weight = 0,
@@ -127,13 +132,13 @@ class Postprocessor(StatPostprocessor):
         self.survival_mode_criteria = survival_mode_criteria  # for health, food, water
         self.get_resource_criteria = get_resource_criteria
         self.death_fog_criteria = death_fog_criteria
+        self.only_use_main_skill = only_use_main_skill
         self.survival_bonus_weight = survival_bonus_weight
         self.progress_bonus_weight = progress_bonus_weight
         self.get_resource_weight = get_resource_weight
         self.meander_bonus_weight = meander_bonus_weight
         self.combat_bonus_weight = combat_bonus_weight
         self.equipment_bonus_weight = equipment_bonus_weight
-        #self.ammofire_bonus_weight = ammofire_bonus_weight
         self.unique_event_bonus_weight = unique_event_bonus_weight
         self.clip_unique_event = clip_unique_event
         self.underdog_bonus_weight = underdog_bonus_weight
@@ -210,6 +215,9 @@ class Postprocessor(StatPostprocessor):
 
         # Mask out the last selected price
         obs["ActionTargets"]["Sell"]["Price"][self._last_price] = 0
+
+        if self.only_use_main_skill:
+            obs["ActionTargets"]["Attack"]["Style"] = SKILL_TO_MASK[self._main_combat_skill]
 
         return obs
 
@@ -293,9 +301,6 @@ class Postprocessor(StatPostprocessor):
 
             # Add combat attribute bonus to encourage leveling up offense/defense
             equipment_bonus = self.equipment_bonus_weight * (self._new_max_offense + self._new_max_defense)
-
-            # Add ammo fire bonus to encourage using ammo
-            #ammo_fire_bonus = self.ammofire_bonus_weight * self._last_ammo_fire
 
             # Unique event-based rewards, similar to exploration bonus
             # The number of unique events are available in self._curr_unique_count, self._prev_unique_count
