@@ -76,6 +76,9 @@ class Config(nmmo.config.Tutorial):
 
         self.COMMUNICATION_SYSTEM_ENABLED = False
 
+        # Currently testing
+        self.NPC_ARMOR_DROP_PROB = args.npc_armor_drop_prob
+
         # These affect training -- use the Tutorial config
         #self.PLAYER_DEATH_FOG = args.death_fog_tick
         #self.COMBAT_SPAWN_IMMUNITY = args.spawn_immunity
