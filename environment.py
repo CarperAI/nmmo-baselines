@@ -309,11 +309,11 @@ class Postprocessor(StatPostprocessor):
             # Add combat bonus to encourage combat activities that increase exp
             combat_bonus = self.combat_bonus_weight * (self._curr_combat_exp - self._last_combat_exp)
 
-            # Add equipment bonus to encourage having any equipment
-            equipment_bonus = self.equipment_bonus_weight * self._maintain_item_level
-
             # Add upgrade bonus to encourage leveling up offense/defense
             upgrade_bonus = self.upgrade_bonus_weight * (self._new_max_offense + self._new_max_defense)
+
+            # Add equipment bonus to encourage having any equipment
+            equipment_bonus = self.equipment_bonus_weight * self._maintain_item_level if upgrade_bonus == 0 else 0
 
             # Unique event-based rewards, similar to exploration bonus
             # The number of unique events are available in self._curr_unique_count, self._prev_unique_count
@@ -326,7 +326,7 @@ class Postprocessor(StatPostprocessor):
             # Sum up all the bonuses. Under the survival mode, ignore some bonuses
             reward += survival_bonus + progress_bonus + equipment_bonus
             if not self._survival_mode:
-                reward += meander_bonus + combat_bonus + unique_event_bonus + underdog_bonus
+                reward += meander_bonus + combat_bonus + upgrade_bonus + unique_event_bonus + underdog_bonus
 
         return reward, done, info
 
