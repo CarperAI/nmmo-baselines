@@ -154,6 +154,11 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         self._prospecting_level = 0
         self._carving_level = 0
         self._alchemy_level = 0
+        self._equip_hat = 0
+        self._equip_top = 0
+        self._equip_bottom = 0
+        self._equip_held = 0
+        self._equip_ammunition = 0
 
     def _update_stats(self, agent):
         task = self.env.agent_task_map[agent.ent_id][0]
@@ -182,6 +187,11 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
             agent.carving_level.val,
             agent.alchemy_level.val,
         ))
+
+        for slot in ["hat", "top", "bottom", "held", "ammunition"]:
+            if getattr(agent.equipment, slot).item is not None:
+                val = getattr(self, "_equip_" + slot)
+                setattr(self, "_equip_" + slot, val + 1)
 
         # For TeamResult
         self._time_alive += agent.history.time_alive.val
@@ -243,6 +253,9 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         result, achieved, performed, _ = get_episode_result(self.env.realm, self.agent_id, self.detailed_stat)
         for key, val in list(achieved.items()) + list(performed.items()):
             info["stats"][key] = float(val)
+
+        for slot in ["hat", "top", "bottom", "held", "ammunition"]:
+            info["stats"]["achieved/norm_dur_" + slot] = getattr(self, "_equip_" + slot) / float(self.epoch_length)
 
         # Fill in the "TeamResult"
         result.max_task_progress = self._max_task_progress

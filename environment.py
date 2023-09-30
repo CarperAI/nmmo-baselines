@@ -78,6 +78,7 @@ class Config(nmmo.config.Tutorial):
 
         # Currently testing
         self.NPC_ARMOR_DROP_PROB = args.npc_armor_drop_prob
+        self.EQUIPMENT_ARMOR_EXPERIMENTAL = True if args.experimental_armor else False
 
         # These affect training -- use the Tutorial config
         #self.PLAYER_DEATH_FOG = args.death_fog_tick
@@ -104,6 +105,7 @@ def make_env_creator(args: Namespace):
                 "meander_bonus_weight": args.meander_bonus_weight,
                 "combat_bonus_weight": args.combat_bonus_weight,
                 "equipment_bonus_weight": args.equipment_bonus_weight,
+                "upgrade_bonus_weight": args.upgrade_bonus_weight,
                 "unique_event_bonus_weight": args.unique_event_bonus_weight,
                 #"underdog_bonus_weight": args.underdog_bonus_weight,
             },
@@ -126,6 +128,7 @@ class Postprocessor(StatPostprocessor):
         meander_bonus_weight=0,
         combat_bonus_weight=0,
         equipment_bonus_weight=0,
+        upgrade_bonus_weight=0,
         unique_event_bonus_weight=0,
         clip_unique_event=3,
         underdog_bonus_weight = 0,
@@ -142,6 +145,7 @@ class Postprocessor(StatPostprocessor):
         self.meander_bonus_weight = meander_bonus_weight
         self.combat_bonus_weight = combat_bonus_weight
         self.equipment_bonus_weight = equipment_bonus_weight
+        self.upgrade_bonus_weight = upgrade_bonus_weight
         self.unique_event_bonus_weight = unique_event_bonus_weight
         self.clip_unique_event = clip_unique_event
         self.underdog_bonus_weight = underdog_bonus_weight
@@ -302,8 +306,11 @@ class Postprocessor(StatPostprocessor):
             # Add combat bonus to encourage combat activities that increase exp
             combat_bonus = self.combat_bonus_weight * (self._curr_combat_exp - self._last_combat_exp)
 
-            # Add combat attribute bonus to encourage leveling up offense/defense
-            equipment_bonus = self.equipment_bonus_weight * (self._new_max_offense + self._new_max_defense)
+            # Add equipment bonus to encourage having any equipment
+            equipment_bonus = self.equipment_bonus_weight * self._curr_equip_count
+
+            # Add upgrade bonus to encourage leveling up offense/defense
+            equipment_bonus += self.upgrade_bonus_weight * (self._new_max_offense + self._new_max_defense)
 
             # Unique event-based rewards, similar to exploration bonus
             # The number of unique events are available in self._curr_unique_count, self._prev_unique_count
@@ -313,10 +320,10 @@ class Postprocessor(StatPostprocessor):
             # Add "Underdog" bonus to encourage attacking higher level agents
             underdog_bonus = self.underdog_bonus_weight * float(self._last_kill_level > agent.attack_level)
 
-            # Sum up all the bonuses. Under the survival mode, ignore other bonuses than the basic bonus
-            reward += survival_bonus + progress_bonus
+            # Sum up all the bonuses. Under the survival mode, ignore some bonuses
+            reward += survival_bonus + progress_bonus + equipment_bonus
             if not self._survival_mode:
-                reward += meander_bonus + equipment_bonus + combat_bonus + unique_event_bonus + underdog_bonus
+                reward += meander_bonus + combat_bonus + unique_event_bonus + underdog_bonus
 
         return reward, done, info
 
@@ -354,6 +361,7 @@ class Postprocessor(StatPostprocessor):
         self._max_defense = 0  # max melee/range/mage equipment defense so far
         self._new_max_defense = 0
         self._last_ammo_fire = 0  # if an ammo was used in the last tick
+        self._curr_equip_count = 0
 
         # unique event bonus (to encourage exploring new actions/items)
         self._prev_unique_count = 0
@@ -390,6 +398,7 @@ class Postprocessor(StatPostprocessor):
         if max_defense > self._max_defense:
             self._new_max_defense = 1.0 if self.env.realm.tick > 1 else 0
             self._max_defense = max_defense
+        self._curr_equip_count = agent.equipment.total(lambda e: e.equipped)
 
         # From the event logs
         log = self.env.realm.event_log.get_data(agents=[self.agent_id])
