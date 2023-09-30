@@ -79,6 +79,9 @@ class Config(nmmo.config.Tutorial):
         # Currently testing
         self.NPC_ARMOR_DROP_PROB = args.npc_armor_drop_prob
         self.EQUIPMENT_ARMOR_EXPERIMENTAL = True if args.experimental_armor else False
+        if args.weak_npc:
+            self.NPC_LEVEL_DAMAGE = 2
+            self.NPC_LEVEL_DEFENSE = 2
 
         # These affect training -- use the Tutorial config
         #self.PLAYER_DEATH_FOG = args.death_fog_tick
@@ -310,7 +313,7 @@ class Postprocessor(StatPostprocessor):
             equipment_bonus = self.equipment_bonus_weight * self._maintain_item_level
 
             # Add upgrade bonus to encourage leveling up offense/defense
-            equipment_bonus += self.upgrade_bonus_weight * (self._new_max_offense + self._new_max_defense)
+            upgrade_bonus = self.upgrade_bonus_weight * (self._new_max_offense + self._new_max_defense)
 
             # Unique event-based rewards, similar to exploration bonus
             # The number of unique events are available in self._curr_unique_count, self._prev_unique_count

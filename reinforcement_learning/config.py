@@ -54,6 +54,7 @@ class Config:
     early_stop_agent_num = 8  # Stop the episode when the number of agents reaches this number
     npc_armor_drop_prob = 0.3  # 0.3 is the default. Set 0 to disable armor
     experimental_armor = None  #  EQUIPMENT_ARMOR_EXPERIMENTAL
+    weak_npc = True  # Make npcs easier
 
     # Reward Args
     only_use_main_skill = True  # This should be default. If set False, agents can use all combat styles
@@ -65,8 +66,8 @@ class Config:
     get_resource_weight = 0.03
     meander_bonus_weight = 0.01
     combat_bonus_weight = 0.001
-    equipment_bonus_weight = 0.01
-    upgrade_bonus_weight = 0.02
+    equipment_bonus_weight = 0.003
+    upgrade_bonus_weight = 0.01
     unique_event_bonus_weight = 0.  # .01
 
     # Policy Args
