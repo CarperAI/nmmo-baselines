@@ -66,7 +66,7 @@ class Config:
     get_resource_weight = 0.03
     meander_bonus_weight = 0.01
     combat_bonus_weight = 0.001
-    equipment_bonus_weight = 0.003
+    equipment_bonus_weight = 0.002
     upgrade_bonus_weight = 0.01
     unique_event_bonus_weight = 0.  # .01
 

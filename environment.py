@@ -13,10 +13,12 @@ from nmmo.lib import material
 from nmmo.lib.log import EventCode
 import nmmo.systems.item as Item
 from nmmo.entity.entity import EntityState
+from nmmo.systems.item import ItemState
 
 from leader_board import StatPostprocessor, extract_unique_event
 
 EntityAttr = EntityState.State.attr_name_to_col
+ItemAttr = ItemState.State.attr_name_to_col
 IMPASSIBLE = list(material.Impassible.indices)
 
 # We can use the following mapping from task name (skill/item name as arg) to profession
@@ -155,6 +157,8 @@ class Postprocessor(StatPostprocessor):
 
         self._main_combat_skill = None
         self._skill_task_embedding = None
+        self._noop_inventry_item = np.zeros(self.config.ITEM_INVENTORY_CAPACITY + 1, dtype=np.int8)
+        self._noop_inventry_item[-1] = 1
 
         # dist map should not change from episode to episode
         self._dist_map = np.zeros((self.config.MAP_SIZE, self.config.MAP_SIZE), dtype=np.int16)
@@ -223,6 +227,13 @@ class Postprocessor(StatPostprocessor):
             [obs["Tile"], dist[:,None], obstacle[:,None], food[:,None], water[:,None], ammo[:,None], target[:,None]],
             axis=1).astype(np.int16)
 
+        # Mask out Give, Destroy, Sell when there are less than 7 items
+        num_item = sum(obs["Inventory"][:, ItemAttr["id"]] != 0)
+        if num_item <= 7:
+            obs["ActionTargets"]["Sell"]["InventoryItem"] = self._noop_inventry_item
+            obs["ActionTargets"]["Give"]["InventoryItem"] = self._noop_inventry_item
+            obs["ActionTargets"]["Destroy"]["InventoryItem"] = self._noop_inventry_item
+
         # Mask out the last selected price
         obs["ActionTargets"]["Sell"]["Price"][self._last_price] = 0
 
@@ -271,7 +282,7 @@ class Postprocessor(StatPostprocessor):
                self._curr_water_level > self.survival_mode_criteria:  # drink water or use ration when dehydrate
                 survival_bonus += self.survival_bonus_weight * (self._curr_water_level - self._last_water_level)
             if self._last_health_level <= self.survival_mode_criteria and \
-               agent.resources.health_restore > 5:
+               agent.resources.health_restore > 8:  # no bonus under death fog (e.g. 100 - 7 death fog + 7 heal)
                 # 10 in case of enough food/water, 50+ for potion
                 survival_bonus += self.survival_bonus_weight * agent.resources.health_restore
 
@@ -401,7 +412,7 @@ class Postprocessor(StatPostprocessor):
         if max_defense > self._max_defense:
             self._new_max_defense = 1.0 if self.env.realm.tick > 1 else 0
             self._max_defense = max_defense
-        self._maintain_item_level = 0
+        self._maintain_item_level = -1.0  # Penalize when agents take off equipment
         if agent.equipment.item_level > 0 and agent.equipment.item_level >= self._max_item_level:
             self._maintain_item_level = 1.0
             self._max_item_level = agent.equipment.item_level
