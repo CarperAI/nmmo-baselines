@@ -307,7 +307,7 @@ class Postprocessor(StatPostprocessor):
             combat_bonus = self.combat_bonus_weight * (self._curr_combat_exp - self._last_combat_exp)
 
             # Add equipment bonus to encourage having any equipment
-            equipment_bonus = self.equipment_bonus_weight * self._curr_equip_count
+            equipment_bonus = self.equipment_bonus_weight * self._maintain_item_level
 
             # Add upgrade bonus to encourage leveling up offense/defense
             equipment_bonus += self.upgrade_bonus_weight * (self._new_max_offense + self._new_max_defense)
@@ -361,7 +361,8 @@ class Postprocessor(StatPostprocessor):
         self._max_defense = 0  # max melee/range/mage equipment defense so far
         self._new_max_defense = 0
         self._last_ammo_fire = 0  # if an ammo was used in the last tick
-        self._curr_equip_count = 0
+        self._max_item_level = 0
+        self._maintain_item_level = 0
 
         # unique event bonus (to encourage exploring new actions/items)
         self._prev_unique_count = 0
@@ -389,7 +390,6 @@ class Postprocessor(StatPostprocessor):
         self._last_combat_exp = self._curr_combat_exp
         self._curr_combat_exp = getattr(agent.skills, self._main_combat_skill).exp.val
         max_offense = getattr(agent, self._main_combat_skill + "_attack")
-        self._new_max_offense = 0
         if max_offense > self._max_offense:
             self._new_max_offense = 1.0 if self.env.realm.tick > 1 else 0
             self._max_offense = max_offense
@@ -398,7 +398,10 @@ class Postprocessor(StatPostprocessor):
         if max_defense > self._max_defense:
             self._new_max_defense = 1.0 if self.env.realm.tick > 1 else 0
             self._max_defense = max_defense
-        self._curr_equip_count = agent.equipment.total(lambda e: e.equipped)
+        self._maintain_item_level = 0
+        if agent.equipment.item_level > 0 and agent.equipment.item_level >= self._max_item_level:
+            self._maintain_item_level = 1.0
+            self._max_item_level = agent.equipment.item_level
 
         # From the event logs
         log = self.env.realm.event_log.get_data(agents=[self.agent_id])
