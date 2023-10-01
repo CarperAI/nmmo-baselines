@@ -20,6 +20,7 @@ from leader_board import StatPostprocessor, extract_unique_event
 EntityAttr = EntityState.State.attr_name_to_col
 ItemAttr = ItemState.State.attr_name_to_col
 IMPASSIBLE = list(material.Impassible.indices)
+ARMOR_LIST = [Item.Hat.ITEM_TYPE_ID, Item.Top.ITEM_TYPE_ID, Item.Bottom.ITEM_TYPE_ID]
 
 # We can use the following mapping from task name (skill/item name as arg) to profession
 TASK_TO_SKILL_MAP = {
@@ -41,6 +42,11 @@ SKILL_TO_AMMO_MAP = {
     "melee": Item.Whetstone.ITEM_TYPE_ID,
     "range": Item.Arrow.ITEM_TYPE_ID,
     "mage": Item.Runes.ITEM_TYPE_ID,
+}
+SKILL_TO_TOOL_MAP = {
+    "melee": Item.Pickaxe.ITEM_TYPE_ID,
+    "range": Item.Axe.ITEM_TYPE_ID,
+    "mage": Item.Chisel.ITEM_TYPE_ID,
 }
 SKILL_TO_TILE_MAP = {
     "melee": material.Ore.index,
@@ -109,7 +115,6 @@ def make_env_creator(args: Namespace):
                 "get_resource_weight": args.get_resource_weight,
                 "meander_bonus_weight": args.meander_bonus_weight,
                 "combat_bonus_weight": args.combat_bonus_weight,
-                "equipment_bonus_weight": args.equipment_bonus_weight,
                 "upgrade_bonus_weight": args.upgrade_bonus_weight,
                 "unique_event_bonus_weight": args.unique_event_bonus_weight,
                 #"underdog_bonus_weight": args.underdog_bonus_weight,
@@ -132,7 +137,6 @@ class Postprocessor(StatPostprocessor):
         get_resource_weight=0,
         meander_bonus_weight=0,
         combat_bonus_weight=0,
-        equipment_bonus_weight=0,
         upgrade_bonus_weight=0,
         unique_event_bonus_weight=0,
         clip_unique_event=3,
@@ -149,7 +153,6 @@ class Postprocessor(StatPostprocessor):
         self.get_resource_weight = get_resource_weight
         self.meander_bonus_weight = meander_bonus_weight
         self.combat_bonus_weight = combat_bonus_weight
-        self.equipment_bonus_weight = equipment_bonus_weight
         self.upgrade_bonus_weight = upgrade_bonus_weight
         self.unique_event_bonus_weight = unique_event_bonus_weight
         self.clip_unique_event = clip_unique_event
@@ -228,15 +231,22 @@ class Postprocessor(StatPostprocessor):
             axis=1).astype(np.int16)
 
         # Mask out Give, Destroy, Sell when there are less than 7 items
+        # NOTE: Can this be learned from scratch?
+        # Without this, agents get rid of items and cannot learn to use and benefit from them
         num_item = sum(obs["Inventory"][:, ItemAttr["id"]] != 0)
         if num_item <= 7:
             obs["ActionTargets"]["Sell"]["InventoryItem"] = self._noop_inventry_item
             obs["ActionTargets"]["Give"]["InventoryItem"] = self._noop_inventry_item
             obs["ActionTargets"]["Destroy"]["InventoryItem"] = self._noop_inventry_item
 
+        # Use the heuristic mask for "Use" action
+        obs["ActionTargets"]["Use"]["InventoryItem"] = self._heuristic_use_mask(obs)
+
         # Mask out the last selected price
         obs["ActionTargets"]["Sell"]["Price"][self._last_price] = 0
 
+        # NOTE: Can this be learned from scratch?
+        # Without this, agents use all skills and don't specialize & level up
         if self.only_use_main_skill:
             obs["ActionTargets"]["Attack"]["Style"] = SKILL_TO_MASK[self._main_combat_skill]
 
@@ -255,6 +265,32 @@ class Postprocessor(StatPostprocessor):
                                entity[EntityAttr["mage_level"]])
             self._entity_map[entity[EntityAttr["row"]], entity[EntityAttr["col"]]] = \
                 max(combat_level, self._entity_map[entity[EntityAttr["row"]], entity[EntityAttr["col"]]])
+
+    # NOTE: Can this be learned from scratch?
+    def _heuristic_use_mask(self, obs):
+        mask = obs["ActionTargets"]["Use"]["InventoryItem"]
+        if sum(obs["Inventory"][:,ItemAttr["id"]] != 0) == 0:
+            return mask
+        # The mask returns 1 for all the "usable" items
+        # Strategy: Assuming the auto-equip is on, equip an item and let it automatically level up
+
+        # First, do NOT issue "Use" on the equipped items
+        equipped = np.where(obs["Inventory"][:,ItemAttr["equipped"]] == 1)
+        mask[equipped] = 0
+
+        # Second, if any of these are equipped, do NOT issue "Use" on the same type of item
+        main_skill_items = [SKILL_TO_AMMO_MAP[self._main_combat_skill], SKILL_TO_TOOL_MAP[self._main_combat_skill]]
+        for type_id in ARMOR_LIST + main_skill_items:
+            type_idx = np.where(obs["Inventory"][:,ItemAttr["type_id"]] == type_id)
+            if sum(obs["Inventory"][type_idx,ItemAttr["equipped"]]) > 0:
+                mask[type_idx] = 0
+
+        # TODO CHECK ME: For now, ignore weapons and consumable tools
+        ignore_for_now = [item.ITEM_TYPE_ID for item in Item.WEAPON + [Item.Rod, Item.Gloves]]
+        type_idx = np.where(np.in1d(obs["Inventory"][:,ItemAttr["type_id"]], ignore_for_now) == True)
+        mask[type_idx] = 0
+
+        return mask
 
     def action(self, action):
         """Called before actions are passed from the model to the environment"""
@@ -323,9 +359,7 @@ class Postprocessor(StatPostprocessor):
             # Add upgrade bonus to encourage leveling up offense/defense
             # NOTE: This can be triggered when a higher-level NPC drops an item that gets auto-equipped
             # Thus, it can make agents more aggressive towards npcs & equip more items
-            equipment_bonus = self.upgrade_bonus_weight * (self._new_max_offense + self._new_max_defense)
-            if equipment_bonus == 0:  # no upgrade this tick
-                equipment_bonus = self.equipment_bonus_weight * self._maintain_item_level  # +1 or -1
+            upgrade_bonus = self.upgrade_bonus_weight * (self._new_max_offense + self._new_max_defense)
 
             # Unique event-based rewards, similar to exploration bonus
             # The number of unique events are available in self._curr_unique_count, self._prev_unique_count
@@ -336,7 +370,7 @@ class Postprocessor(StatPostprocessor):
             underdog_bonus = self.underdog_bonus_weight * float(self._last_kill_level > agent.attack_level)
 
             # Sum up all the bonuses. Under the survival mode, ignore some bonuses
-            reward += survival_bonus + progress_bonus + equipment_bonus
+            reward += survival_bonus + progress_bonus + upgrade_bonus
             if not self._survival_mode:
                 reward += meander_bonus + combat_bonus + unique_event_bonus + underdog_bonus
 
@@ -377,7 +411,6 @@ class Postprocessor(StatPostprocessor):
         self._new_max_defense = 0
         self._last_ammo_fire = 0  # if an ammo was used in the last tick
         self._max_item_level = 0
-        self._maintain_item_level = 0
 
         # unique event bonus (to encourage exploring new actions/items)
         self._prev_unique_count = 0
@@ -413,10 +446,6 @@ class Postprocessor(StatPostprocessor):
         if max_defense > self._max_defense:
             self._new_max_defense = 1.0 if self.env.realm.tick > 1 else 0
             self._max_defense = max_defense
-        self._maintain_item_level = -1.0  # Penalize when agents take off equipment
-        if agent.equipment.item_level > 0 and agent.equipment.item_level >= self._max_item_level:
-            self._maintain_item_level = 1.0
-            self._max_item_level = agent.equipment.item_level
 
         # From the event logs
         log = self.env.realm.event_log.get_data(agents=[self.agent_id])

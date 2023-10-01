@@ -98,6 +98,9 @@ def save_replays(policy_store_dir, save_dir):
     nmmo_env.realm.record_replay(replay_helper)
     replay_helper.reset()
 
+    score = 0
+    num_agents = len(nmmo_env.possible_agents)
+
     # Run an episode to generate the replay
     while True:
         with torch.no_grad():
@@ -111,9 +114,13 @@ def save_replays(policy_store_dir, save_dir):
         o, r, d, i = evaluator.buffers[0].recv()
 
         num_alive = len(nmmo_env.realm.players)
+        score += num_alive
         print('Tick:', nmmo_env.realm.tick, ", alive agents:", num_alive)
         if num_alive == 0 or nmmo_env.realm.tick == args.max_episode_length:
             break
+
+    score = float(score) / (num_agents * args.max_episode_length)
+    print(f'Score: {score:.3f}')
 
     # Save the replay file
     replay_file = os.path.join(save_dir, f"replay_{time.strftime('%Y%m%d_%H%M%S')}")
