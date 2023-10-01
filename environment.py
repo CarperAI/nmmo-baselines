@@ -48,6 +48,11 @@ SKILL_TO_TOOL_MAP = {
     "range": Item.Axe.ITEM_TYPE_ID,
     "mage": Item.Chisel.ITEM_TYPE_ID,
 }
+SKILL_TO_WEAPON_MAP = {
+    "melee": Item.Spear.ITEM_TYPE_ID,
+    "range": Item.Bow.ITEM_TYPE_ID,
+    "mage": Item.Wand.ITEM_TYPE_ID,
+}
 SKILL_TO_TILE_MAP = {
     "melee": material.Ore.index,
     "range": material.Tree.index,
@@ -162,6 +167,8 @@ class Postprocessor(StatPostprocessor):
         self._skill_task_embedding = None
         self._noop_inventry_item = np.zeros(self.config.ITEM_INVENTORY_CAPACITY + 1, dtype=np.int8)
         self._noop_inventry_item[-1] = 1
+        self._ignore_items = None
+        self._main_skill_items = None
 
         # dist map should not change from episode to episode
         self._dist_map = np.zeros((self.config.MAP_SIZE, self.config.MAP_SIZE), dtype=np.int16)
@@ -181,6 +188,15 @@ class Postprocessor(StatPostprocessor):
         self._main_combat_skill = self._choose_combat_skill(task_name)
         self._combat_embedding = np.zeros(9, dtype=np.int16)  # copy CombatAttr to [3:]
         self._combat_embedding[SKILL_LIST.index(self._main_combat_skill)] = 1
+
+        # NOTE: The items that are not used by the main combat skill are ignored
+        # TODO: Revisit this
+        not_my_ammo = [ammo for skill, ammo in SKILL_TO_AMMO_MAP.items() if skill != self._main_combat_skill]
+        not_my_tool = [tool for skill, tool in SKILL_TO_TOOL_MAP.items() if skill != self._main_combat_skill]
+        not_my_weapon = [weapon for skill, weapon in SKILL_TO_WEAPON_MAP.items() if skill != self._main_combat_skill]
+        self._ignore_items = not_my_ammo + not_my_tool + not_my_weapon + [Item.Rod, Item.Gloves]
+        self._main_skill_items = [SKILL_TO_AMMO_MAP[self._main_combat_skill], SKILL_TO_TOOL_MAP[self._main_combat_skill],
+                                  SKILL_TO_WEAPON_MAP[self._main_combat_skill]]
 
     @staticmethod
     def _choose_combat_skill(task_name):
@@ -274,21 +290,43 @@ class Postprocessor(StatPostprocessor):
         # The mask returns 1 for all the "usable" items
         # Strategy: Assuming the auto-equip is on, equip an item and let it automatically level up
 
-        # First, do NOT issue "Use" on the equipped items
+        # Do NOT issue "Use" on the equipped items
         equipped = np.where(obs["Inventory"][:,ItemAttr["equipped"]] == 1)
         mask[equipped] = 0
 
-        # Second, if any of these are equipped, do NOT issue "Use" on the same type of item
-        main_skill_items = [SKILL_TO_AMMO_MAP[self._main_combat_skill], SKILL_TO_TOOL_MAP[self._main_combat_skill]]
-        for type_id in ARMOR_LIST + main_skill_items:
+        # If any of these are equipped, do NOT issue "Use" on the same type of item unless it has higher level
+        for type_id in ARMOR_LIST + self._main_skill_items:
             type_idx = np.where(obs["Inventory"][:,ItemAttr["type_id"]] == type_id)
+            # if there is an item of the same type that is not equipped
             if np.sum(obs["Inventory"][type_idx,ItemAttr["equipped"]]) > 0:
                 mask[type_idx] = 0
+                if len(type_idx[0]) > 1: # if there are more than 1 items of the same type
+                    type_equipped = np.intersect1d(type_idx, equipped)
+                    level_equipped = np.max(obs["Inventory"][type_equipped,ItemAttr["level"]])
+                    max_level = np.max(obs["Inventory"][type_idx,ItemAttr["level"]])
+                    if max_level > level_equipped:
+                        # NOTE: This actions is ignored when the agent cannot equip the item due to lower level
+                        use_this = np.argmax(obs["Inventory"][type_idx,ItemAttr["level"]])
+                        mask[type_idx[0][use_this]] = 1
 
-        # TODO CHECK ME: For now, ignore weapons and consumable tools
-        ignore_for_now = [item.ITEM_TYPE_ID for item in Item.WEAPON + [Item.Rod, Item.Gloves]]
-        type_idx = np.where(np.in1d(obs["Inventory"][:,ItemAttr["type_id"]], ignore_for_now) == True)
+        # Ignore the items that are not used by the main combat skill
+        # NOTE: Revisit the items later, especially Rod and Gloves
+        type_idx = np.where(np.in1d(obs["Inventory"][:,ItemAttr["type_id"]], self._ignore_items) == True)
         mask[type_idx] = 0
+
+        # Use ration or potion ONLY when necessary
+        starve_or_hydrate = min(self._curr_food_level, self._curr_water_level) == 0 and \
+                            max(self._curr_food_level, self._curr_water_level) <= self.survival_mode_criteria
+        if not starve_or_hydrate:
+            type_idx = np.where(obs["Inventory"][:,ItemAttr["type_id"]] == Item.Ration.ITEM_TYPE_ID)
+            mask[type_idx] = 0
+        if not starve_or_hydrate and self._curr_health_level > self.survival_mode_criteria:
+            type_idx = np.where(obs["Inventory"][:,ItemAttr["type_id"]] == Item.Potion.ITEM_TYPE_ID)
+            mask[type_idx] = 0
+
+        # Remove no-op when there is something to use
+        if np.sum(mask) > 1:
+            mask[-1] = 0
 
         return mask
 
@@ -326,26 +364,28 @@ class Postprocessor(StatPostprocessor):
             progress_bonus = 0
             for idx, event_code in enumerate(BASIC_BONUS_EVENTS):
                 if self._last_basic_events[idx] > 0:
-                    curr_dist = self._dist_map[agent.pos]
                     if event_code == EventCode.EAT_FOOD:
                         # progress and eat
-                        if curr_dist < self._last_eat_dist:
+                        if self._curr_dist < self._last_eat_dist:
                             progress_bonus += self.progress_bonus_weight
-                            self._last_eat_dist = curr_dist
+                            self._last_eat_dist = self._curr_dist
                         # eat when starting to starve
                         if self.survival_mode_criteria < self._last_food_level <= self.get_resource_criteria:
                             survival_bonus += self.get_resource_weight
                     if event_code == EventCode.DRINK_WATER:
                         # progress and drink
-                        if curr_dist < self._last_drink_dist:
+                        if self._curr_dist < self._last_drink_dist:
                             progress_bonus += self.progress_bonus_weight
-                            self._last_drink_dist = curr_dist
+                            self._last_drink_dist = self._curr_dist
                         # drink when starting to dehydrate
                         if self.survival_mode_criteria < self._last_water_level <= self.get_resource_criteria:
                             survival_bonus += self.get_resource_weight
-                    # run away from death fog
-                    if event_code == EventCode.GO_FARTHEST and self._curr_death_fog > 0:
-                        progress_bonus += self.meander_bonus_weight # use meander bonus
+
+            # run away from death fog
+            if self._curr_death_fog > 0:
+                direction = 1 if self._last_dist > self._curr_dist else -1
+                direction = 0 if self._last_dist == self._curr_dist else direction
+                progress_bonus += self.meander_bonus_weight * direction  # NOTE: using meander bonus
 
             # Add meandering bonus to encourage meandering (to prevent entropy collapse)
             meander_bonus = 0
@@ -386,6 +426,8 @@ class Postprocessor(StatPostprocessor):
         self._last_water_level = 100
         self._curr_water_level = 100
         self._curr_death_fog = 0
+        self._last_dist = np.inf  # to center
+        self._curr_dist = np.inf
         self._survival_mode = False
 
         # progress bonuses: eat & progress, drink & progress, run away from the death fog
@@ -429,6 +471,8 @@ class Postprocessor(StatPostprocessor):
         self._last_water_level = self._curr_water_level
         self._curr_water_level = agent.resources.water.val
         self._curr_death_fog = self.env.realm.fog_map[agent.pos]
+        self._last_dist = self._curr_dist
+        self._curr_dist = self._dist_map[agent.pos]
         self._survival_mode = True if min(self._last_health_level,
                                           self._last_food_level,
                                           self._last_water_level) <= self.survival_mode_criteria or \
