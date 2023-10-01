@@ -282,7 +282,7 @@ class Postprocessor(StatPostprocessor):
         main_skill_items = [SKILL_TO_AMMO_MAP[self._main_combat_skill], SKILL_TO_TOOL_MAP[self._main_combat_skill]]
         for type_id in ARMOR_LIST + main_skill_items:
             type_idx = np.where(obs["Inventory"][:,ItemAttr["type_id"]] == type_id)
-            if sum(obs["Inventory"][type_idx,ItemAttr["equipped"]]) > 0:
+            if np.sum(obs["Inventory"][type_idx,ItemAttr["equipped"]]) > 0:
                 mask[type_idx] = 0
 
         # TODO CHECK ME: For now, ignore weapons and consumable tools
