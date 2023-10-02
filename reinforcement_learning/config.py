@@ -41,7 +41,7 @@ class Config:
     clip_coef = 0.1  # PPO clip coefficient
 
     # Environment Args
-    num_agents = 64  # Number of agents to use for training
+    num_agents = 96  # Number of agents to use for training
     num_npcs = 256  # Number of NPCs to use for training
     max_episode_length = 1024  # Number of steps per episode
     num_maps = 128  # Number of maps to use for training
@@ -61,9 +61,10 @@ class Config:
     survival_mode_criteria = 35  # for health, food, water level
     get_resource_criteria = 75  # for food and water
     death_fog_criteria = 1  # fog damage
-    survival_bonus_weight = 0.001  # * diff health/food/water level (max: 100)
-    progress_bonus_weight = 0.05
-    get_resource_weight = 0.03
+    survival_heal_weight = 0.001  # * diff health level (max: 100)
+    survival_resource_weight = 0.05
+    get_resource_weight = 0.02
+    progress_bonus_weight = 0.10
     meander_bonus_weight = 0.01
     combat_bonus_weight = 0.001
     upgrade_bonus_weight = 0.02

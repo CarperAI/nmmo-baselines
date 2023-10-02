@@ -115,9 +115,10 @@ def make_env_creator(args: Namespace):
                 "only_use_main_skill": args.only_use_main_skill,
                 "survival_mode_criteria": args.survival_mode_criteria,
                 "death_fog_criteria": args.death_fog_criteria,
-                "survival_bonus_weight": args.survival_bonus_weight,
-                "progress_bonus_weight": args.progress_bonus_weight,
+                "survival_heal_weight": args.survival_heal_weight,
+                "survival_resource_weight": args.survival_resource_weight,
                 "get_resource_weight": args.get_resource_weight,
+                "progress_bonus_weight": args.progress_bonus_weight,
                 "meander_bonus_weight": args.meander_bonus_weight,
                 "combat_bonus_weight": args.combat_bonus_weight,
                 "upgrade_bonus_weight": args.upgrade_bonus_weight,
@@ -137,9 +138,10 @@ class Postprocessor(StatPostprocessor):
         survival_mode_criteria=35,
         get_resource_criteria=70,
         death_fog_criteria=1,
-        survival_bonus_weight=0,
-        progress_bonus_weight=0,
+        survival_heal_weight=0,
+        survival_resource_weight=0,
         get_resource_weight=0,
+        progress_bonus_weight=0,
         meander_bonus_weight=0,
         combat_bonus_weight=0,
         upgrade_bonus_weight=0,
@@ -153,9 +155,10 @@ class Postprocessor(StatPostprocessor):
         self.get_resource_criteria = get_resource_criteria
         self.death_fog_criteria = death_fog_criteria
         self.only_use_main_skill = only_use_main_skill
-        self.survival_bonus_weight = survival_bonus_weight
-        self.progress_bonus_weight = progress_bonus_weight
+        self.survival_heal_weight = survival_heal_weight
+        self.survival_resource_weight = survival_resource_weight
         self.get_resource_weight = get_resource_weight
+        self.progress_bonus_weight = progress_bonus_weight
         self.meander_bonus_weight = meander_bonus_weight
         self.combat_bonus_weight = combat_bonus_weight
         self.upgrade_bonus_weight = upgrade_bonus_weight
@@ -348,17 +351,22 @@ class Postprocessor(StatPostprocessor):
             self._update_reward_vars(agent)
 
             survival_bonus = 0
-            # Survival bonus: eat when starve, drink when dehydrate, run away from death fog
+            # Survival mode: heal bonus
+            if self._last_health_level <= self.survival_mode_criteria and \
+               agent.resources.health_restore > 7:  # no bonus under death fog (e.g. 100 - 7 death fog + 7 heal)
+                # 10 in case of enough food/water, 50+ for potion
+                survival_bonus += self.survival_heal_weight * agent.resources.health_restore
+            # Survival mode: eat when starve, drink when dehydrate
             if self._last_food_level <= self.survival_mode_criteria and \
                self._curr_food_level > self.survival_mode_criteria:  # eat food or use ration when starve
-                survival_bonus += self.survival_bonus_weight * (self._curr_food_level - self._last_food_level)
+                survival_bonus += self.survival_resource_weight
+            if self.survival_mode_criteria < self._last_food_level <= self.get_resource_criteria:
+                survival_bonus += self.get_resource_weight
             if self._last_water_level <= self.survival_mode_criteria and \
                self._curr_water_level > self.survival_mode_criteria:  # drink water or use ration when dehydrate
-                survival_bonus += self.survival_bonus_weight * (self._curr_water_level - self._last_water_level)
-            if self._last_health_level <= self.survival_mode_criteria and \
-               agent.resources.health_restore > 8:  # no bonus under death fog (e.g. 100 - 7 death fog + 7 heal)
-                # 10 in case of enough food/water, 50+ for potion
-                survival_bonus += self.survival_bonus_weight * agent.resources.health_restore
+                survival_bonus += self.survival_resource_weight
+            if self.survival_mode_criteria < self._last_water_level <= self.get_resource_criteria:
+                survival_bonus += self.get_resource_weight
 
             # Progress bonuses: eat & progress, drink & progress, run away from the death fog
             progress_bonus = 0
@@ -369,21 +377,14 @@ class Postprocessor(StatPostprocessor):
                         if self._curr_dist < self._last_eat_dist:
                             progress_bonus += self.progress_bonus_weight
                             self._last_eat_dist = self._curr_dist
-                        # eat when starting to starve
-                        if self.survival_mode_criteria < self._last_food_level <= self.get_resource_criteria:
-                            survival_bonus += self.get_resource_weight
                     if event_code == EventCode.DRINK_WATER:
                         # progress and drink
                         if self._curr_dist < self._last_drink_dist:
                             progress_bonus += self.progress_bonus_weight
                             self._last_drink_dist = self._curr_dist
-                        # drink when starting to dehydrate
-                        if self.survival_mode_criteria < self._last_water_level <= self.get_resource_criteria:
-                            survival_bonus += self.get_resource_weight
                     # run away from death fog
                     if event_code == EventCode.GO_FARTHEST and self._curr_death_fog > 0:
                         progress_bonus += self.meander_bonus_weight # use meander bonus
-
             # run away from death fog (can get duplicate bonus, but worth rewarding)
             if self._curr_death_fog > 0 and self._curr_dist < min(self._last_dist[-8:]):
                 progress_bonus += self.meander_bonus_weight # use meander bonus
