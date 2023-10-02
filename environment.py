@@ -380,18 +380,19 @@ class Postprocessor(StatPostprocessor):
                         # drink when starting to dehydrate
                         if self.survival_mode_criteria < self._last_water_level <= self.get_resource_criteria:
                             survival_bonus += self.get_resource_weight
+                    # run away from death fog
+                    if event_code == EventCode.GO_FARTHEST and self._curr_death_fog > 0:
+                        progress_bonus += self.meander_bonus_weight # use meander bonus
 
-            # run away from death fog
-            if self._curr_death_fog > 0:
-                direction = 1 if self._last_dist > self._curr_dist else -1
-                direction = 0 if self._last_dist == self._curr_dist else direction
-                progress_bonus += self.meander_bonus_weight * direction  # NOTE: using meander bonus
+            # run away from death fog (can get duplicate bonus, but worth rewarding)
+            if self._curr_death_fog > 0 and self._curr_dist < min(self._last_dist[-8:]):
+                progress_bonus += self.meander_bonus_weight # use meander bonus
 
             # Add meandering bonus to encourage meandering (to prevent entropy collapse)
             meander_bonus = 0
             if len(self._last_moves) > 5:
-              move_entropy = calculate_entropy(self._last_moves[-8:])  # of last 8 moves
-              meander_bonus += self.meander_bonus_weight * (move_entropy - 1)
+                move_entropy = calculate_entropy(self._last_moves[-8:])  # of last 8 moves
+                meander_bonus += self.meander_bonus_weight * (move_entropy - 1)
 
             # Add combat bonus to encourage combat activities that increase exp
             combat_bonus = self.combat_bonus_weight * (self._curr_combat_exp - self._last_combat_exp)
@@ -426,7 +427,7 @@ class Postprocessor(StatPostprocessor):
         self._last_water_level = 100
         self._curr_water_level = 100
         self._curr_death_fog = 0
-        self._last_dist = np.inf  # to center
+        self._last_dist = []
         self._curr_dist = np.inf
         self._survival_mode = False
 
@@ -471,7 +472,7 @@ class Postprocessor(StatPostprocessor):
         self._last_water_level = self._curr_water_level
         self._curr_water_level = agent.resources.water.val
         self._curr_death_fog = self.env.realm.fog_map[agent.pos]
-        self._last_dist = self._curr_dist
+        self._last_dist.append(self._curr_dist)
         self._curr_dist = self._dist_map[agent.pos]
         self._survival_mode = True if min(self._last_health_level,
                                           self._last_food_level,

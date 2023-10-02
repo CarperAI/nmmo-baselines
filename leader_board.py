@@ -434,29 +434,34 @@ def extract_unique_event(log, attr_to_col):
 
     # mask some columns to make the event redundant
     cols_to_ignore = {
-        EventCode.GO_FARTHEST: ["distance"],
+        EventCode.GO_FARTHEST: [],  # count only once; there is progress bonus
         EventCode.SCORE_HIT: ["damage"],
-        #EventCode.PLAYER_KILL: ["target_ent"],
+        #EventCode.PLAYER_KILL: ["target_ent"], -- each player kill gets counted
         # treat each (item, level) differently but count only once 
         EventCode.CONSUME_ITEM: ["quantity"],
         EventCode.HARVEST_ITEM: ["quantity"],
         EventCode.EQUIP_ITEM: ["quantity"],
-        EventCode.LOOT_ITEM: ["quantity"],
+        EventCode.LOOT_ITEM: ["quantity", "target_ent"],
+        EventCode.LOOT_GOLD: [],  # count only once
         EventCode.FIRE_AMMO: ["quantity"],
+        EventCode.AUTO_EQUIP: [],  # count only once
         EventCode.LIST_ITEM: ["type", "quantity", "price"],
-        EventCode.BUY_ITEM: ["type", "quantity", "price"],
+        EventCode.BUY_ITEM: ["quantity", "price"],
     }
 
     for code, attrs in cols_to_ignore.items():
-        idx = log[:, attr_to_col["event"]] == code
-        for attr in attrs:
-            log[idx, attr_to_col[attr]] = 0
+        idx = log[:,attr_to_col["event"]] == code
+        if len(attrs) == 0:
+            log[idx,attr_to_col["event"]+1:] = 0
+        else:
+            for attr in attrs:
+                log[idx,attr_to_col[attr]] = 0
 
     # make every EARN_GOLD events unique, from looting and selling
-    # idx = log[:, attr_to_col["event"]] == EventCode.EARN_GOLD
-    # log[idx, attr_to_col["number"]] = log[
-    #     idx, attr_to_col["tick"]
-    # ].copy()  # this is a hack
+    idx = log[:, attr_to_col["event"]] == EventCode.EARN_GOLD
+    log[idx, attr_to_col["number"]] = log[
+        idx, attr_to_col["tick"]
+    ].copy()  # this is a hack
 
     # return unique events after masking
     return set(tuple(row) for row in log[:, attr_to_col["event"]:])
