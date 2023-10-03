@@ -356,15 +356,8 @@ class Postprocessor(StatPostprocessor):
                agent.resources.health_restore > 7:  # no bonus under death fog (e.g. 100 - 7 death fog + 7 heal)
                 # 10 in case of enough food/water, 50+ for potion
                 survival_bonus += self.survival_heal_weight * agent.resources.health_restore
-            # Survival mode: eat when starve, drink when dehydrate
-            if self._last_food_level <= self.survival_mode_criteria and \
-               self._curr_food_level > self.survival_mode_criteria:  # eat food or use ration when starve
-                survival_bonus += self.survival_resource_weight
-            if self._last_water_level <= self.survival_mode_criteria and \
-               self._curr_water_level > self.survival_mode_criteria:  # drink water or use ration when dehydrate
-                survival_bonus += self.survival_resource_weight
 
-            # Progress bonuses: eat & progress, drink & progress, run away from the death fog
+            # Survival & progress bonuses: eat & progress, drink & progress, run away from the death fog
             progress_bonus = 0
             for idx, event_code in enumerate(BASIC_BONUS_EVENTS):
                 if self._last_basic_events[idx] > 0:
@@ -373,15 +366,23 @@ class Postprocessor(StatPostprocessor):
                         if self._curr_dist < self._last_eat_dist:
                             progress_bonus += self.progress_bonus_weight
                             self._last_eat_dist = self._curr_dist
-                        if self.survival_mode_criteria < self._last_food_level <= self.get_resource_criteria:
+                        # eat when starve
+                        if self._last_food_level <= self.survival_mode_criteria:
+                            survival_bonus += self.survival_resource_weight
+                        elif self._last_food_level <= self.get_resource_criteria:
                             survival_bonus += self.get_resource_weight
+
                     if event_code == EventCode.DRINK_WATER:
                         # progress and drink
                         if self._curr_dist < self._last_drink_dist:
                             progress_bonus += self.progress_bonus_weight
                             self._last_drink_dist = self._curr_dist
-                        if self.survival_mode_criteria < self._last_water_level <= self.get_resource_criteria:
+                        # drink when dehydrated
+                        if self._last_water_level <= self.survival_mode_criteria:
+                            survival_bonus += self.survival_resource_weight
+                        elif self._last_water_level <= self.get_resource_criteria:
                             survival_bonus += self.get_resource_weight
+
                     # run away from death fog
                     if event_code == EventCode.GO_FARTHEST and self._curr_death_fog > 0:
                         progress_bonus += self.meander_bonus_weight # use meander bonus

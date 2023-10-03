@@ -64,7 +64,7 @@ class Config:
     survival_heal_weight = 0.001  # * diff health level (max: 100)
     survival_resource_weight = 0.05
     get_resource_weight = 0.02
-    progress_bonus_weight = 0.10
+    progress_bonus_weight = 0.05
     meander_bonus_weight = 0.01
     combat_bonus_weight = 0.001
     upgrade_bonus_weight = 0.02
