@@ -65,6 +65,7 @@ class Config:
     survival_resource_weight = 0.05
     get_resource_weight = 0.02
     progress_bonus_weight = 0.05
+    runaway_bonus_weight = 0.03
     meander_bonus_weight = 0.01
     combat_bonus_weight = 0.001
     upgrade_bonus_weight = 0.02

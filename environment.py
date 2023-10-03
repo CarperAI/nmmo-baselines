@@ -119,6 +119,7 @@ def make_env_creator(args: Namespace):
                 "survival_resource_weight": args.survival_resource_weight,
                 "get_resource_weight": args.get_resource_weight,
                 "progress_bonus_weight": args.progress_bonus_weight,
+                "runaway_bonus_weight": args.runaway_bonus_weight,
                 "meander_bonus_weight": args.meander_bonus_weight,
                 "combat_bonus_weight": args.combat_bonus_weight,
                 "upgrade_bonus_weight": args.upgrade_bonus_weight,
@@ -142,6 +143,7 @@ class Postprocessor(StatPostprocessor):
         survival_resource_weight=0,
         get_resource_weight=0,
         progress_bonus_weight=0,
+        runaway_bonus_weight=0,
         meander_bonus_weight=0,
         combat_bonus_weight=0,
         upgrade_bonus_weight=0,
@@ -159,6 +161,7 @@ class Postprocessor(StatPostprocessor):
         self.survival_resource_weight = survival_resource_weight
         self.get_resource_weight = get_resource_weight
         self.progress_bonus_weight = progress_bonus_weight
+        self.runaway_bonus_weight = runaway_bonus_weight
         self.meander_bonus_weight = meander_bonus_weight
         self.combat_bonus_weight = combat_bonus_weight
         self.upgrade_bonus_weight = upgrade_bonus_weight
@@ -385,10 +388,10 @@ class Postprocessor(StatPostprocessor):
 
                     # run away from death fog
                     if event_code == EventCode.GO_FARTHEST and self._curr_death_fog > 0:
-                        progress_bonus += self.meander_bonus_weight # use meander bonus
+                        progress_bonus += self.runaway_bonus_weight # use meander bonus
             # run away from death fog (can get duplicate bonus, but worth rewarding)
             if self._curr_death_fog > 0 and self._curr_dist < min(self._last_dist[-8:]):
-                progress_bonus += self.meander_bonus_weight # use meander bonus
+                progress_bonus += self.runaway_bonus_weight # use meander bonus
 
             # Add meandering bonus to encourage meandering (to prevent entropy collapse)
             meander_bonus = 0
