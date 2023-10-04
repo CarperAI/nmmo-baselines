@@ -355,8 +355,9 @@ class Postprocessor(StatPostprocessor):
 
             survival_bonus = 0
             # Survival mode: heal bonus
+            # NOTE: agents got addicted to this bonus under death fog, so added death fog criteria
             if self._last_health_level <= self.survival_mode_criteria and \
-               agent.resources.health_restore > 7:  # no bonus under death fog (e.g. 100 - 7 death fog + 7 heal)
+               self._curr_death_fog < self.death_fog_criteria:
                 # 10 in case of enough food/water, 50+ for potion
                 survival_bonus += self.survival_heal_weight * agent.resources.health_restore
 
@@ -373,7 +374,9 @@ class Postprocessor(StatPostprocessor):
                         if self._last_food_level <= self.survival_mode_criteria:
                             survival_bonus += self.survival_resource_weight
                         elif self._last_food_level <= self.get_resource_criteria:
-                            survival_bonus += self.get_resource_weight
+                            # under death fog, better move to the center
+                            if self._curr_death_fog < self.death_fog_criteria:
+                                survival_bonus += self.get_resource_weight
 
                     if event_code == EventCode.DRINK_WATER:
                         # progress and drink
@@ -384,14 +387,16 @@ class Postprocessor(StatPostprocessor):
                         if self._last_water_level <= self.survival_mode_criteria:
                             survival_bonus += self.survival_resource_weight
                         elif self._last_water_level <= self.get_resource_criteria:
-                            survival_bonus += self.get_resource_weight
+                            # under death fog, better move to the center
+                            if self._curr_death_fog < self.death_fog_criteria:
+                                survival_bonus += self.get_resource_weight
 
                     # run away from death fog
                     if event_code == EventCode.GO_FARTHEST and self._curr_death_fog > 0:
-                        progress_bonus += self.runaway_bonus_weight # use meander bonus
+                        progress_bonus += self.runaway_bonus_weight
             # run away from death fog (can get duplicate bonus, but worth rewarding)
             if self._curr_death_fog > 0 and self._curr_dist < min(self._last_dist[-8:]):
-                progress_bonus += self.runaway_bonus_weight # use meander bonus
+                progress_bonus += self.runaway_bonus_weight
 
             # Add meandering bonus to encourage meandering (to prevent entropy collapse)
             meander_bonus = 0

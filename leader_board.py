@@ -239,6 +239,7 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         info["stats"]["cod/attacked"] = self._cod_attacked
         info["stats"]["cod/starved"] = self._cod_starved
         info["stats"]["cod/dehydrated"] = self._cod_dehydrated
+        info["stats"]["cod/death_fog"] = float(self.env.realm.fog_map[agent.pos] > 10)  # heavy fog
         info["stats"]["task/completed"] = self._task_completed
         info["stats"]["task/pcnt_2_reward_signal"] = self._task_with_2_reward_signal
         info["stats"]["task/pcnt_0p2_max_progress"] = self._task_with_0p2_max_progress
