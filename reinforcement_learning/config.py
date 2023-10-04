@@ -42,7 +42,7 @@ class Config:
 
     # Environment Args
     num_agents = 96  # Number of agents to use for training
-    num_npcs = 0  # Number of NPCs to use for training
+    num_npcs = 256  # Number of NPCs to use for training
     max_episode_length = 1024  # Number of steps per episode
     num_maps = 128  # Number of maps to use for training
     maps_path = "maps/train/"  # Path to maps to use for training
@@ -52,9 +52,12 @@ class Config:
     eval_mode = False # Run the postprocessor in the eval mode
     detailed_stat = True # Run the postprocessor in the detailed stat mode, which sends a lot to wandb
     early_stop_agent_num = 8  # Stop the episode when the number of agents reaches this number
-    npc_armor_drop_prob = 0.3  # 0.3 is the default. Set 0 to disable armor
+
+    # Experimental Args
+    spawn_immunity = max_episode_length  # make the game cooperative
+    npc_power = 0.3  # NPC_POWER_MULTIPLIER
+    armor_drop = 0.3  # NPC_ARMOR_DROP_PROB
     experimental_armor = None  #  EQUIPMENT_ARMOR_EXPERIMENTAL
-    weak_npc = True  # Make npcs easier
 
     # Reward Args
     only_use_main_skill = True  # This should be default. If set False, agents can use all combat styles

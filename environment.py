@@ -90,15 +90,11 @@ class Config(nmmo.config.Tutorial):
         self.COMMUNICATION_SYSTEM_ENABLED = False
 
         # Currently testing
-        self.NPC_ARMOR_DROP_PROB = args.npc_armor_drop_prob
+        self.COMBAT_SPAWN_IMMUNITY = args.spawn_immunity
+        self.NPC_POWER_MULTIPLIER = args.npc_power
+        self.NPC_ARMOR_DROP_PROB = args.armor_drop
+        # self.EXCHANGE_ACTION_TARGET_DISABLE_LISTING
         self.EQUIPMENT_ARMOR_EXPERIMENTAL = True if args.experimental_armor else False
-        if args.weak_npc:
-            self.NPC_LEVEL_DAMAGE = 2
-            self.NPC_LEVEL_DEFENSE = 2
-
-        # These affect training -- use the Tutorial config
-        #self.PLAYER_DEATH_FOG = args.death_fog_tick
-        #self.COMBAT_SPAWN_IMMUNITY = args.spawn_immunity
 
 
 def make_env_creator(args: Namespace):
