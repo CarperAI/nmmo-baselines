@@ -144,6 +144,7 @@ class Postprocessor(StatPostprocessor):
         get_resource_weight=0,
         progress_bonus_weight=0,
         runaway_bonus_weight=0,
+        progress_refractory_period=5,
         meander_bonus_weight=0,
         combat_bonus_weight=0,
         upgrade_bonus_weight=0,
@@ -162,6 +163,7 @@ class Postprocessor(StatPostprocessor):
         self.get_resource_weight = get_resource_weight
         self.progress_bonus_weight = progress_bonus_weight
         self.runaway_bonus_weight = runaway_bonus_weight
+        self.progress_refractory_period = progress_refractory_period
         self.meander_bonus_weight = meander_bonus_weight
         self.combat_bonus_weight = combat_bonus_weight
         self.upgrade_bonus_weight = upgrade_bonus_weight
@@ -363,6 +365,7 @@ class Postprocessor(StatPostprocessor):
 
             # Survival & progress bonuses: eat & progress, drink & progress, run away from the death fog
             progress_bonus = 0
+            self._progress_refractory_counter -= 1
             for idx, event_code in enumerate(BASIC_BONUS_EVENTS):
                 if self._last_basic_events[idx] > 0:
                     if event_code == EventCode.EAT_FOOD:
@@ -392,11 +395,15 @@ class Postprocessor(StatPostprocessor):
                                 survival_bonus += self.get_resource_weight
 
                     # run away from death fog
-                    if event_code == EventCode.GO_FARTHEST and self._curr_death_fog > 0:
-                        progress_bonus += self.runaway_bonus_weight
+                    if event_code == EventCode.GO_FARTHEST:
+                        if self._curr_death_fog > 0 or self._progress_refractory_counter <= 0:
+                            progress_bonus += self.runaway_bonus_weight
+                            self._progress_refractory_counter = self.progress_refractory_period
             # run away from death fog (can get duplicate bonus, but worth rewarding)
-            if self._curr_death_fog > 0 and self._curr_dist < min(self._last_dist[-8:]):
-                progress_bonus += self.runaway_bonus_weight
+            if self._curr_dist < min(self._last_dist[-8:]):
+                if self._curr_death_fog > 0 or self._progress_refractory_counter <= 0:
+                    progress_bonus += self.runaway_bonus_weight
+                    self._progress_refractory_counter = self.progress_refractory_period
 
             # Add meandering bonus to encourage meandering (to prevent entropy collapse)
             meander_bonus = 0
@@ -447,6 +454,7 @@ class Postprocessor(StatPostprocessor):
         self._last_basic_events = np.zeros(num_basic_events, dtype=np.int16)
         self._last_eat_dist = np.inf
         self._last_drink_dist = np.inf
+        self._progress_refractory_counter = 0
 
         # meander bonus (to prevent entropy collapse)
         self._last_moves = []

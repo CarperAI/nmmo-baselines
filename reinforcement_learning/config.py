@@ -62,10 +62,11 @@ class Config:
     get_resource_criteria = 75  # for food and water
     death_fog_criteria = 2  # fog damage
     survival_heal_weight = 0.001  # * diff health level (max: 100)
-    survival_resource_weight = 0.05
-    get_resource_weight = 0.02
+    survival_resource_weight = 0.06
+    get_resource_weight = 0.03
     progress_bonus_weight = 0.10
     runaway_bonus_weight = 0.02
+    progress_refractory_period = 5
     meander_bonus_weight = 0.01
     combat_bonus_weight = 0.001
     upgrade_bonus_weight = 0.02

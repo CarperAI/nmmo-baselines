@@ -286,6 +286,8 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
         if self.detailed_stat and self.is_env_done():
             info["stats"].update(get_market_stat(self.env.realm))
             info["stats"].update(get_supply_stat(self.env.realm))
+            for key, val in self.env.get_episode_stats().items():
+                info["stats"]["supply/"+key] = val  # supply is a placeholder
 
         return reward, done, info
 
