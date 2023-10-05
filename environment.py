@@ -185,8 +185,9 @@ class Postprocessor(StatPostprocessor):
             l, r = i, self.config.MAP_SIZE - i
             self._dist_map[l:r, l:r] = center - i - 1
 
-        # placeholder for the entity map
-        self._entity_map = np.zeros((self.config.MAP_SIZE, self.config.MAP_SIZE), dtype=np.int16)
+        # placeholder for the entity maps
+        self._ally_map = np.zeros((self.config.MAP_SIZE, self.config.MAP_SIZE), dtype=np.int16)
+        self._enemy_map = np.zeros((self.config.MAP_SIZE, self.config.MAP_SIZE), dtype=np.int16)
 
     def reset(self, obs):
         """Called at the start of each episode"""
@@ -224,8 +225,8 @@ class Postprocessor(StatPostprocessor):
         combat_dim = 3 + obs_space["CombatAttr"].shape[0]
         obs_space["CombatAttr"] = gym.spaces.Box(low=-2**15, high=2**15-1, dtype=np.int16,
                                            shape=(combat_dim,))
-        # Add informative tile maps: dist, obstacle, food, water, ammo, target
-        tile_dim = obs_space["Tile"].shape[1] + 6
+        # Add informative tile maps: dist, obstacle, food, water, ammo, enemy, ally
+        tile_dim = obs_space["Tile"].shape[1] + 7
         obs_space["Tile"] = gym.spaces.Box(low=-2**15, high=2**15-1, dtype=np.int16,
                                            shape=(self.config.MAP_N_OBS, tile_dim))
         return obs_space
@@ -242,7 +243,8 @@ class Postprocessor(StatPostprocessor):
 
         # Map entities to the tile map
         self._update_target_map(obs)
-        target = self._entity_map[obs["Tile"][:,0], obs["Tile"][:,1]]
+        enemy = self._enemy_map[obs["Tile"][:,0], obs["Tile"][:,1]]
+        ally = self._ally_map[obs["Tile"][:,0], obs["Tile"][:,1]]
 
         # TODO: update the harvest status?
         dist = self._dist_map[obs["Tile"][:,0], obs["Tile"][:,1]]
@@ -251,7 +253,7 @@ class Postprocessor(StatPostprocessor):
         water = obs["Tile"][:,2] == material.Water.index
         ammo = obs["Tile"][:,2] == SKILL_TO_TILE_MAP[self._main_combat_skill]
         obs["Tile"] = np.concatenate(
-            [obs["Tile"], dist[:,None], obstacle[:,None], food[:,None], water[:,None], ammo[:,None], target[:,None]],
+            [obs["Tile"], dist[:,None], obstacle[:,None], food[:,None], water[:,None], ammo[:,None], enemy[:,None], ally[:,None]],
             axis=1).astype(np.int16)
 
         # Mask out Give, Destroy, Sell when there are less than 7 items
@@ -277,18 +279,25 @@ class Postprocessor(StatPostprocessor):
         return obs
 
     def _update_target_map(self, obs):
-        self._entity_map[:] = 0
+        self._ally_map[:] = 0
+        self._enemy_map[:] = 0
         entity_idx = obs["Entity"][:, EntityAttr["id"]] != 0
-        cannot_attack_player = True if self.config.COMBAT_SPAWN_IMMUNITY >= self.env.realm.tick else False
+        can_attack_player = True if self.config.COMBAT_SPAWN_IMMUNITY < self.env.realm.tick else False
         for entity in obs["Entity"][entity_idx]:
-            if entity[EntityAttr["id"]] == self.agent_id or \
-               entity[EntityAttr["id"]] > 0 and cannot_attack_player is True:
+            if entity[EntityAttr["id"]] == self.agent_id:
                 continue
             combat_level = max(entity[EntityAttr["melee_level"]],
                                entity[EntityAttr["range_level"]],
                                entity[EntityAttr["mage_level"]])
-            self._entity_map[entity[EntityAttr["row"]], entity[EntityAttr["col"]]] = \
-                max(combat_level, self._entity_map[entity[EntityAttr["row"]], entity[EntityAttr["col"]]])
+
+            # NOTE: this might be a good place to add "team" info later
+            # For now, all players are allys during the combat spawn immunity period
+            if entity[EntityAttr["id"]] < 0 or can_attack_player:
+                self._enemy_map[entity[EntityAttr["row"]], entity[EntityAttr["col"]]] = \
+                    max(combat_level, self._enemy_map[entity[EntityAttr["row"]], entity[EntityAttr["col"]]])
+            else:
+                self._ally_map[entity[EntityAttr["row"]], entity[EntityAttr["col"]]] = \
+                    max(combat_level, self._ally_map[entity[EntityAttr["row"]], entity[EntityAttr["col"]]])
 
     # NOTE: Can this be learned from scratch?
     def _heuristic_use_mask(self, obs):

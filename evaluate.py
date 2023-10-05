@@ -96,12 +96,15 @@ def save_replays(policy_store_dir, save_dir):
     replay_helper = FileReplayHelper()
     nmmo_env = evaluator.buffers[0].envs[0].envs[0].env
     nmmo_env.realm.record_replay(replay_helper)
-    replay_helper.reset()
-
-    score = 0
-    num_agents = len(nmmo_env.possible_agents)
+    # Replace the names of the agents with the policy names
+    # TODO: Get the id-to-name mapping from the evaluator or policy pool
+    for samp, (policy_name, _) in zip(evaluator.policy_pool._sample_idxs, evaluator.policy_pool._policies.items()):
+        for idx in samp:
+            agent_id = nmmo_env.possible_agents[idx]
+            nmmo_env.realm.players[agent_id].name = policy_name + '_' + str(agent_id)
 
     # Run an episode to generate the replay
+    replay_helper.reset()
     while True:
         with torch.no_grad():
             actions, logprob, value, _ = evaluator.policy_pool.forwards(
@@ -114,13 +117,14 @@ def save_replays(policy_store_dir, save_dir):
         o, r, d, i = evaluator.buffers[0].recv()
 
         num_alive = len(nmmo_env.realm.players)
-        score += num_alive
         print('Tick:', nmmo_env.realm.tick, ", alive agents:", num_alive)
         if num_alive == 0 or nmmo_env.realm.tick == args.max_episode_length:
             break
 
-    score = float(score) / (num_agents * args.max_episode_length)
-    print(f'Score: {score:.3f}')
+    episode_stats = nmmo_env.get_episode_stats()
+    num_agents = len(nmmo_env.possible_agents)
+    print(f'Score: {float(episode_stats["total_agent_steps"])/(num_agents*args.max_episode_length):.3f},',
+          f'norm_progress_to_center {episode_stats["norm_progress_to_center"]:.3f}')
 
     # Save the replay file
     replay_file = os.path.join(save_dir, f"replay_{time.strftime('%Y%m%d_%H%M%S')}")
