@@ -125,6 +125,7 @@ def make_env_creator(args: Namespace):
                 "upgrade_bonus_weight": args.upgrade_bonus_weight,
                 "unique_event_bonus_weight": args.unique_event_bonus_weight,
                 #"underdog_bonus_weight": args.underdog_bonus_weight,
+                "use_ally_map": args.ally_map
             },
         )
         return env
@@ -151,6 +152,7 @@ class Postprocessor(StatPostprocessor):
         unique_event_bonus_weight=0,
         clip_unique_event=3,
         underdog_bonus_weight = 0,
+        use_ally_map=None,
     ):
         super().__init__(env, agent_id, eval_mode, detailed_stat, early_stop_agent_num)
         self.config = env.config
@@ -170,6 +172,7 @@ class Postprocessor(StatPostprocessor):
         self.unique_event_bonus_weight = unique_event_bonus_weight
         self.clip_unique_event = clip_unique_event
         self.underdog_bonus_weight = underdog_bonus_weight
+        self.use_ally_map = use_ally_map
 
         self._main_combat_skill = None
         self._skill_task_embedding = None
@@ -226,7 +229,8 @@ class Postprocessor(StatPostprocessor):
         obs_space["CombatAttr"] = gym.spaces.Box(low=-2**15, high=2**15-1, dtype=np.int16,
                                            shape=(combat_dim,))
         # Add informative tile maps: dist, obstacle, food, water, ammo, enemy, ally
-        tile_dim = obs_space["Tile"].shape[1] + 7
+        add_dim = 7 if self.use_ally_map else 6
+        tile_dim = obs_space["Tile"].shape[1] + add_dim
         obs_space["Tile"] = gym.spaces.Box(low=-2**15, high=2**15-1, dtype=np.int16,
                                            shape=(self.config.MAP_N_OBS, tile_dim))
         return obs_space
@@ -252,9 +256,11 @@ class Postprocessor(StatPostprocessor):
         food = obs["Tile"][:,2] == material.Foilage.index
         water = obs["Tile"][:,2] == material.Water.index
         ammo = obs["Tile"][:,2] == SKILL_TO_TILE_MAP[self._main_combat_skill]
-        obs["Tile"] = np.concatenate(
-            [obs["Tile"], dist[:,None], obstacle[:,None], food[:,None], water[:,None], ammo[:,None], enemy[:,None], ally[:,None]],
-            axis=1).astype(np.int16)
+
+        maps = [obs["Tile"], dist[:,None], obstacle[:,None], food[:,None], water[:,None], ammo[:,None], enemy[:,None]]
+        if self.use_ally_map:
+            maps.append(ally[:,None])
+        obs["Tile"] = np.concatenate(maps, axis=1).astype(np.int16)
 
         # Mask out Give, Destroy, Sell when there are less than 7 items
         # NOTE: Can this be learned from scratch?
@@ -292,12 +298,11 @@ class Postprocessor(StatPostprocessor):
 
             # NOTE: this might be a good place to add "team" info later
             # For now, all players are allys during the combat spawn immunity period
+            ent_pos = (entity[EntityAttr["row"]], entity[EntityAttr["col"]])
             if entity[EntityAttr["id"]] < 0 or can_attack_player:
-                self._enemy_map[entity[EntityAttr["row"]], entity[EntityAttr["col"]]] = \
-                    max(combat_level, self._enemy_map[entity[EntityAttr["row"]], entity[EntityAttr["col"]]])
+                self._enemy_map[ent_pos] = max(combat_level, self._enemy_map[ent_pos])
             else:
-                self._ally_map[entity[EntityAttr["row"]], entity[EntityAttr["col"]]] = \
-                    max(combat_level, self._ally_map[entity[EntityAttr["row"]], entity[EntityAttr["col"]]])
+                self._ally_map[ent_pos] = max(combat_level, self._ally_map[ent_pos])
 
     # NOTE: Can this be learned from scratch?
     def _heuristic_use_mask(self, obs):

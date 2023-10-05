@@ -59,6 +59,7 @@ class Config:
     npc_power = 0.3  # NPC_POWER_MULTIPLIER
     armor_drop = 0.3  # NPC_ARMOR_DROP_PROB
     experimental_armor = None  #  EQUIPMENT_ARMOR_EXPERIMENTAL
+    ally_map = None
 
     # Reward Args
     only_use_main_skill = True  # This should be default. If set False, agents can use all combat styles
