@@ -55,6 +55,7 @@ class Config:
 
     # Experimental Args
     spawn_immunity = max_episode_length  # make the game cooperative
+    base_exp = 30  # PROGRESSION_EXP_THRESHOLD
     npc_power = 0.3  # NPC_POWER_MULTIPLIER
     armor_drop = 0.3  # NPC_ARMOR_DROP_PROB
     experimental_armor = None  #  EQUIPMENT_ARMOR_EXPERIMENTAL

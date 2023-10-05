@@ -91,6 +91,10 @@ class Config(nmmo.config.Tutorial):
 
         # Currently testing
         self.COMBAT_SPAWN_IMMUNITY = args.spawn_immunity
+        self.PROGRESSION_EXP_THRESHOLD = nmmo.config.default_exp_threshold(
+            base_exp = args.base_exp, max_level = 10
+        )
+
         self.NPC_POWER_MULTIPLIER = args.npc_power
         self.NPC_ARMOR_DROP_PROB = args.armor_drop
         # self.EXCHANGE_ACTION_TARGET_DISABLE_LISTING
