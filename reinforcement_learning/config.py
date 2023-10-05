@@ -52,6 +52,7 @@ class Config:
     eval_mode = False # Run the postprocessor in the eval mode
     detailed_stat = True # Run the postprocessor in the detailed stat mode, which sends a lot to wandb
     early_stop_agent_num = 8  # Stop the episode when the number of agents reaches this number
+    ally_map = None
 
     # Experimental Args
     spawn_immunity = max_episode_length  # make the game cooperative
@@ -59,7 +60,6 @@ class Config:
     npc_power = 0.3  # NPC_POWER_MULTIPLIER
     armor_drop = 0.3  # NPC_ARMOR_DROP_PROB
     experimental_armor = None  #  EQUIPMENT_ARMOR_EXPERIMENTAL
-    ally_map = None
 
     # Reward Args
     only_use_main_skill = True  # This should be default. If set False, agents can use all combat styles

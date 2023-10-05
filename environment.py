@@ -245,22 +245,8 @@ class Postprocessor(StatPostprocessor):
         self._combat_embedding[3:] = obs["CombatAttr"]
         obs["CombatAttr"] = self._combat_embedding
 
-        # Map entities to the tile map
-        self._update_target_map(obs)
-        enemy = self._enemy_map[obs["Tile"][:,0], obs["Tile"][:,1]]
-        ally = self._ally_map[obs["Tile"][:,0], obs["Tile"][:,1]]
-
-        # TODO: update the harvest status?
-        dist = self._dist_map[obs["Tile"][:,0], obs["Tile"][:,1]]
-        obstacle = np.isin(obs["Tile"][:,2], IMPASSIBLE)
-        food = obs["Tile"][:,2] == material.Foilage.index
-        water = obs["Tile"][:,2] == material.Water.index
-        ammo = obs["Tile"][:,2] == SKILL_TO_TILE_MAP[self._main_combat_skill]
-
-        maps = [obs["Tile"], dist[:,None], obstacle[:,None], food[:,None], water[:,None], ammo[:,None], enemy[:,None]]
-        if self.use_ally_map:
-            maps.append(ally[:,None])
-        obs["Tile"] = np.concatenate(maps, axis=1).astype(np.int16)
+        # Parse and augment tile obs
+        obs["Tile"] = self._augment_tile_obs(obs)
 
         # Mask out Give, Destroy, Sell when there are less than 7 items
         # NOTE: Can this be learned from scratch?
@@ -284,7 +270,14 @@ class Postprocessor(StatPostprocessor):
 
         return obs
 
-    def _update_target_map(self, obs):
+    def _augment_tile_obs(self, obs):
+        dist = self._dist_map[obs["Tile"][:,0], obs["Tile"][:,1]]
+        obstacle = np.isin(obs["Tile"][:,2], IMPASSIBLE)
+        food = obs["Tile"][:,2] == material.Foilage.index
+        water = obs["Tile"][:,2] == material.Water.index
+        ammo = obs["Tile"][:,2] == SKILL_TO_TILE_MAP[self._main_combat_skill]
+
+        # Process entity obs
         self._ally_map[:] = 0
         self._enemy_map[:] = 0
         entity_idx = obs["Entity"][:, EntityAttr["id"]] != 0
@@ -292,17 +285,32 @@ class Postprocessor(StatPostprocessor):
         for entity in obs["Entity"][entity_idx]:
             if entity[EntityAttr["id"]] == self.agent_id:
                 continue
+            # If a player is on the resource tile, assume the resource is harvested
+            # Without this, adding the ally map hampered the agent training
+            if entity[EntityAttr["id"]] > 0:
+                ent_idx = np.where((obs["Tile"][:,0] == entity[EntityAttr["row"]]) &
+                                   (obs["Tile"][:,1] == entity[EntityAttr["col"]]))[0]
+                food[ent_idx] = False
+                ammo[ent_idx] = False
+
+            # Mark the enemy and ally on the map with their combat level
+            # NOTE: this might be a good place to add "team" info later
+            # For now, all players are allys during the combat spawn immunity period
             combat_level = max(entity[EntityAttr["melee_level"]],
                                entity[EntityAttr["range_level"]],
                                entity[EntityAttr["mage_level"]])
-
-            # NOTE: this might be a good place to add "team" info later
-            # For now, all players are allys during the combat spawn immunity period
             ent_pos = (entity[EntityAttr["row"]], entity[EntityAttr["col"]])
             if entity[EntityAttr["id"]] < 0 or can_attack_player:
                 self._enemy_map[ent_pos] = max(combat_level, self._enemy_map[ent_pos])
             else:
                 self._ally_map[ent_pos] = max(combat_level, self._ally_map[ent_pos])
+        enemy = self._enemy_map[obs["Tile"][:,0], obs["Tile"][:,1]]
+        ally = self._ally_map[obs["Tile"][:,0], obs["Tile"][:,1]]
+
+        maps = [obs["Tile"], dist[:,None], obstacle[:,None], food[:,None], water[:,None], ammo[:,None], enemy[:,None]]
+        if self.use_ally_map:
+            maps.append(ally[:,None])
+        return np.concatenate(maps, axis=1).astype(np.int16)
 
     # NOTE: Can this be learned from scratch?
     def _heuristic_use_mask(self, obs):
