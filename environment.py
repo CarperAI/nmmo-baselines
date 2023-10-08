@@ -14,6 +14,7 @@ from nmmo.lib.log import EventCode
 import nmmo.systems.item as Item
 from nmmo.entity.entity import EntityState
 from nmmo.systems.item import ItemState
+from nmmo.lib.team_helper import TeamHelper
 
 from leader_board import StatPostprocessor, extract_unique_event
 
@@ -21,6 +22,12 @@ EntityAttr = EntityState.State.attr_name_to_col
 ItemAttr = ItemState.State.attr_name_to_col
 IMPASSIBLE = list(material.Impassible.indices)
 ARMOR_LIST = [Item.Hat.ITEM_TYPE_ID, Item.Top.ITEM_TYPE_ID, Item.Bottom.ITEM_TYPE_ID]
+
+PASSIVE_REPR = 1  # matched to npc_type
+NEUTRAL_REPR = 2
+HOSTILE_REPR = 3
+ENEMY_REPR = 4
+TEAMMATE_REPR = 5
 
 # We can use the following mapping from task name (skill/item name as arg) to profession
 TASK_TO_SKILL_MAP = {
@@ -78,6 +85,8 @@ class Config(nmmo.config.Tutorial):
         self.PROVIDE_DEATH_FOG_OBS = True
         self.MAP_FORCE_GENERATION = False
         self.PLAYER_N = args.num_agents
+        self.TEAMS = {i: [i*8+j+1 for j in range(8)]  # 8 players per team
+                      for i in range(args.num_agents//8)}
         self.HORIZON = args.max_episode_length
         self.MAP_N = args.num_maps
         self.PATH_MAPS = f"{args.maps_path}/{args.map_size}/"
@@ -90,6 +99,7 @@ class Config(nmmo.config.Tutorial):
         self.COMMUNICATION_SYSTEM_ENABLED = False
 
         # Currently testing
+        self.TEAM_TASK_EPISODE_PROB = 0.3
         self.COMBAT_SPAWN_IMMUNITY = args.spawn_immunity
         self.PROGRESSION_EXP_THRESHOLD = nmmo.config.default_exp_threshold(
             base_exp = args.base_exp, max_level = 10
@@ -125,7 +135,6 @@ def make_env_creator(args: Namespace):
                 "upgrade_bonus_weight": args.upgrade_bonus_weight,
                 "unique_event_bonus_weight": args.unique_event_bonus_weight,
                 #"underdog_bonus_weight": args.underdog_bonus_weight,
-                "use_ally_map": args.ally_map
             },
         )
         return env
@@ -152,7 +161,6 @@ class Postprocessor(StatPostprocessor):
         unique_event_bonus_weight=0,
         clip_unique_event=3,
         underdog_bonus_weight = 0,
-        use_ally_map=None,
     ):
         super().__init__(env, agent_id, eval_mode, detailed_stat, early_stop_agent_num)
         self.config = env.config
@@ -172,7 +180,6 @@ class Postprocessor(StatPostprocessor):
         self.unique_event_bonus_weight = unique_event_bonus_weight
         self.clip_unique_event = clip_unique_event
         self.underdog_bonus_weight = underdog_bonus_weight
-        self.use_ally_map = use_ally_map
 
         self._main_combat_skill = None
         self._skill_task_embedding = None
@@ -189,8 +196,9 @@ class Postprocessor(StatPostprocessor):
             self._dist_map[l:r, l:r] = center - i - 1
 
         # placeholder for the entity maps
-        self._ally_map = np.zeros((self.config.MAP_SIZE, self.config.MAP_SIZE), dtype=np.int16)
-        self._enemy_map = np.zeros((self.config.MAP_SIZE, self.config.MAP_SIZE), dtype=np.int16)
+        self._entity_map = np.zeros((self.config.MAP_SIZE, self.config.MAP_SIZE), dtype=np.int16)
+        self._my_team = None
+        self._team_helper = None
 
     def reset(self, obs):
         """Called at the start of each episode"""
@@ -210,6 +218,15 @@ class Postprocessor(StatPostprocessor):
         self._main_skill_items = [SKILL_TO_AMMO_MAP[self._main_combat_skill], SKILL_TO_TOOL_MAP[self._main_combat_skill],
                                   SKILL_TO_WEAPON_MAP[self._main_combat_skill]]
 
+        if self.env.agent_task_map[self.agent_id][0].reward_to == "team":
+            # engaged in the team task
+            self._team_helper = TeamHelper(self.env.config.TEAMS)
+            team_id = self._team_helper.team_and_position_for_agent[self.agent_id][0]
+            self._my_team = self._team_helper.teams[team_id]
+        else:
+            self._team_helper = None
+            self._my_team = [self.agent_id]
+
     @staticmethod
     def _choose_combat_skill(task_name):
         task_name = task_name.lower()
@@ -228,8 +245,8 @@ class Postprocessor(StatPostprocessor):
         combat_dim = 3 + obs_space["CombatAttr"].shape[0]
         obs_space["CombatAttr"] = gym.spaces.Box(low=-2**15, high=2**15-1, dtype=np.int16,
                                            shape=(combat_dim,))
-        # Add informative tile maps: dist, obstacle, food, water, ammo, enemy, ally
-        add_dim = 7 if self.use_ally_map else 6
+        # Add informative tile maps: dist, obstacle, food, water, ammo, entity
+        add_dim = 6
         tile_dim = obs_space["Tile"].shape[1] + add_dim
         obs_space["Tile"] = gym.spaces.Box(low=-2**15, high=2**15-1, dtype=np.int16,
                                            shape=(self.config.MAP_N_OBS, tile_dim))
@@ -267,6 +284,8 @@ class Postprocessor(StatPostprocessor):
         # Without this, agents use all skills and don't specialize & level up
         if self.only_use_main_skill:
             obs["ActionTargets"]["Attack"]["Style"] = SKILL_TO_MASK[self._main_combat_skill]
+        # Do NOT attack teammates
+        obs["ActionTargets"]["Attack"]["Target"] = self._process_attack_mask(obs)
 
         return obs
 
@@ -278,39 +297,42 @@ class Postprocessor(StatPostprocessor):
         ammo = obs["Tile"][:,2] == SKILL_TO_TILE_MAP[self._main_combat_skill]
 
         # Process entity obs
-        self._ally_map[:] = 0
-        self._enemy_map[:] = 0
+        self._entity_map[:] = 0
         entity_idx = obs["Entity"][:, EntityAttr["id"]] != 0
-        can_attack_player = True if self.config.COMBAT_SPAWN_IMMUNITY < self.env.realm.tick else False
         for entity in obs["Entity"][entity_idx]:
             if entity[EntityAttr["id"]] == self.agent_id:
                 continue
-            # If a player is on the resource tile, assume the resource is harvested
             # Without this, adding the ally map hampered the agent training
+            ent_pos = (entity[EntityAttr["row"]], entity[EntityAttr["col"]])
             if entity[EntityAttr["id"]] > 0:
+                if entity[EntityAttr["id"]] in self._my_team:
+                    self._entity_map[ent_pos] = max(TEAMMATE_REPR, self._entity_map[ent_pos])
+                else:
+                    self._entity_map[ent_pos] = max(ENEMY_REPR, self._entity_map[ent_pos])
+                # If a player is on the resource tile, assume the resource is harvested
                 ent_idx = np.where((obs["Tile"][:,0] == entity[EntityAttr["row"]]) &
                                    (obs["Tile"][:,1] == entity[EntityAttr["col"]]))[0]
                 food[ent_idx] = False
                 ammo[ent_idx] = False
-
-            # Mark the enemy and ally on the map with their combat level
-            # NOTE: this might be a good place to add "team" info later
-            # For now, all players are allys during the combat spawn immunity period
-            combat_level = max(entity[EntityAttr["melee_level"]],
-                               entity[EntityAttr["range_level"]],
-                               entity[EntityAttr["mage_level"]])
-            ent_pos = (entity[EntityAttr["row"]], entity[EntityAttr["col"]])
-            if entity[EntityAttr["id"]] < 0 or can_attack_player:
-                self._enemy_map[ent_pos] = max(combat_level, self._enemy_map[ent_pos])
             else:
-                self._ally_map[ent_pos] = max(combat_level, self._ally_map[ent_pos])
-        enemy = self._enemy_map[obs["Tile"][:,0], obs["Tile"][:,1]]
-        ally = self._ally_map[obs["Tile"][:,0], obs["Tile"][:,1]]
+                npc_type = entity[EntityAttr["npc_type"]]
+                self._entity_map[ent_pos] = max(npc_type, self._entity_map[ent_pos])
+        entity = self._entity_map[obs["Tile"][:,0], obs["Tile"][:,1]]
 
-        maps = [obs["Tile"], dist[:,None], obstacle[:,None], food[:,None], water[:,None], ammo[:,None], enemy[:,None]]
-        if self.use_ally_map:
-            maps.append(ally[:,None])
+        maps = [obs["Tile"], dist[:,None], obstacle[:,None], food[:,None], water[:,None], ammo[:,None], entity[:,None]]
         return np.concatenate(maps, axis=1).astype(np.int16)
+
+    def _process_attack_mask(self, obs):
+        mask = obs["ActionTargets"]["Attack"]["Target"]
+        if sum(mask) == 1 and mask[-1] == 1:  # no valid target
+            return mask
+        target_idx = np.where(mask[:-1] == 1)[0]
+        teammate = np.in1d(obs["Entity"][target_idx,EntityAttr["id"]], self._my_team)
+        # Do NOT attack teammates
+        mask[target_idx[teammate]] = 0
+        if sum(mask) == 0:
+            mask[-1] = 1  # if no valid target, make sure to turn on no-op
+        return mask
 
     # NOTE: Can this be learned from scratch?
     def _heuristic_use_mask(self, obs):

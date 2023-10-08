@@ -52,7 +52,6 @@ class Config:
     eval_mode = False # Run the postprocessor in the eval mode
     detailed_stat = True # Run the postprocessor in the detailed stat mode, which sends a lot to wandb
     early_stop_agent_num = 8  # Stop the episode when the number of agents reaches this number
-    ally_map = None
 
     # Experimental Args
     spawn_immunity = max_episode_length  # make the game cooperative

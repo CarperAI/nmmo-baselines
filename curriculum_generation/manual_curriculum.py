@@ -9,6 +9,7 @@ import nmmo.systems.item as Item
 import nmmo.systems.skill as Skill
 from nmmo.task import constraint as c
 from nmmo.task.base_predicates import (
+    AllDead,
     AttainSkill,
     BuyItem,
     CanSeeAgent,
@@ -72,6 +73,15 @@ for event_code in most_essentials:
             sampling_weight=100,
         )
     )
+
+# team battle -- only team tasks
+curriculum.append(
+    TaskSpec(
+        eval_fn=AllDead,
+        eval_fn_kwargs={'target': 'all_foes'},
+        reward_to='team'
+    )
+)
 
 essential_skills = [
     "SCORE_HIT",
