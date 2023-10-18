@@ -2,6 +2,11 @@ from argparse import Namespace
 import math
 
 import nmmo
+try:
+  from nmmo.core.game_api import AgentTraining
+except ImportError:
+  AgentTraining = None
+
 import pufferlib
 import pufferlib.emulation
 
@@ -13,23 +18,24 @@ class Config(nmmo.config.Default):
     def __init__(self, args: Namespace):
         super().__init__()
 
-        self.PROVIDE_ACTION_TARGETS = True
-        self.PROVIDE_NOOP_ACTION_TARGET = True
-        self.MAP_FORCE_GENERATION = False
-        self.PLAYER_N = args.num_agents
-        self.HORIZON = args.max_episode_length
-        self.MAP_N = args.num_maps
-        self.PLAYER_DEATH_FOG = args.death_fog_tick
-        self.PATH_MAPS = f"{args.maps_path}/{args.map_size}/"
-        self.MAP_CENTER = args.map_size
-        self.NPC_N = args.num_npcs
-        self.CURRICULUM_FILE_PATH = args.tasks_path
-        self.TASK_EMBED_DIM = args.task_size
-        self.RESOURCE_RESILIENT_POPULATION = args.resilient_population
+        self.set("PROVIDE_ACTION_TARGETS", True)
+        self.set("PROVIDE_NOOP_ACTION_TARGET", True)
+        self.set("MAP_FORCE_GENERATION", False)
+        self.set("COMMUNICATION_SYSTEM_ENABLED", False)
+        self.set("GAME_PACKS", [(AgentTraining, 1)] if AgentTraining else None)
 
-        self.COMMUNICATION_SYSTEM_ENABLED = False
-
-        self.COMBAT_SPAWN_IMMUNITY = args.spawn_immunity
+        # Get values from args
+        self.set("PLAYER_N", args.num_agents)
+        self.set("HORIZON", args.max_episode_length)
+        self.set("MAP_N", args.num_maps)
+        self.set("PLAYER_DEATH_FOG", args.death_fog_tick)
+        self.set("PATH_MAPS", f"{args.maps_path}/{args.map_size}/")
+        self.set("MAP_CENTER", args.map_size)
+        self.set("NPC_N", args.num_npcs)
+        self.set("CURRICULUM_FILE_PATH", args.tasks_path)
+        self.set("TASK_EMBED_DIM", args.task_size)
+        self.set("RESOURCE_RESILIENT_POPULATION", args.resilient_population)
+        self.set("COMBAT_SPAWN_IMMUNITY", args.spawn_immunity)
 
 class Postprocessor(StatPostprocessor):
     def __init__(self, env, is_multiagent, agent_id,

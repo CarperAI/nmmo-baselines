@@ -134,7 +134,7 @@ class TaskEncoder:
 
         if save_to_file:  # use save_to_file as the file name
             with open(self.temp_file_path, "wb") as f:
-                dill.dump(task_spec_list, f)
+                dill.dump(task_spec_list, f, recurse=True)
             os.replace(self.temp_file_path, save_to_file)
 
         return task_spec_list

@@ -9,7 +9,7 @@ import pufferlib
 import pufferlib.emulation
 
 from nmmo.core.realm import Realm
-from nmmo.lib.log import EventCode
+from nmmo.lib.event_log import EventCode
 import nmmo.systems.item as Item
 
 @dataclass
