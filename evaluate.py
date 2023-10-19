@@ -26,6 +26,9 @@ import environment
 
 from reinforcement_learning import config, clean_pufferl
 
+EVAL_CURRICULUM_FILE = "reinforcement_learning/eval_task_with_embedding.pkl"
+
+
 def setup_policy_store(policy_store_dir):
     # CHECK ME: can be custom models with different architectures loaded here?
     if not os.path.exists(policy_store_dir):
@@ -56,6 +59,7 @@ def save_replays(policy_store_dir, save_dir):
     args.selfplay_num_policies = num_policies + 1
     args.early_stop_agent_num = 0  # run the full episode
     args.resilient_population = 0  # no resilient agents
+    args.tasks_path = EVAL_CURRICULUM_FILE
 
     # NOTE: This creates a dummy learner agent. Is it necessary?
     from reinforcement_learning import policy  # import your policy
@@ -294,7 +298,7 @@ if __name__ == "__main__":
         "--task-file",
         dest="task_file",
         type=str,
-        default="reinforcement_learning/eval_task_with_embedding.pkl",
+        default=EVAL_CURRICULUM_FILE,
         help="Task file to use for evaluation",
     )
 
