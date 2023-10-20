@@ -32,7 +32,6 @@ def setup_env(args):
             envs.driver_env,
             input_size=args.input_size,
             hidden_size=args.hidden_size,
-            anneal_lr=args.anneal_lr,
         )
         return cleanrl.Policy(learner_policy)
 
@@ -69,6 +68,7 @@ def reinforcement_learning_track(trainer, args):
             update_epochs=args.ppo_update_epochs,
             bptt_horizon=args.bptt_horizon,
             batch_rows=args.ppo_training_batch_size // args.bptt_horizon,
+            anneal_lr=args.anneal_lr,
             clip_coef=args.clip_coef,
         )
 
