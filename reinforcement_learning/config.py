@@ -20,7 +20,7 @@ class Config:
     eval_batch_size = 2**15 # Number of steps to rollout for eval
     train_num_steps = 10_000_000  # Number of steps to train
     eval_num_steps = 1_000_000  # Number of steps to evaluate
-    checkpoint_interval = 30  # Interval to save models
+    checkpoint_interval = 80  # Interval to save models
     run_name = f"nmmo_{time.strftime('%Y%m%d_%H%M%S')}"  # Run name
     runs_dir = "/tmp/runs"  # Directory for runs
     policy_store_dir = None # Policy store directory
@@ -36,7 +36,8 @@ class Config:
     bptt_horizon = 8  # Train on this number of steps of a rollout at a time. Used to reduce GPU memory.
     ppo_training_batch_size = 128  # Number of rows in a training batch
     ppo_update_epochs = 3  # Number of update epochs to use for training
-    ppo_learning_rate = 0.00015  # Learning rate
+    ppo_learning_rate = 0.0001  # Learning rate
+    anneal_lr = True  # Anneal learning rate
     clip_coef = 0.1  # PPO clip coefficient
 
     # Environment Args
@@ -48,14 +49,39 @@ class Config:
     maps_path = "maps/train/"  # Path to maps to use for training
     map_size = 128  # Size of maps to use for training
     resilient_population = 0.2  # Percentage of agents to be resilient to starvation/dehydration
+    spawn_immunity = 20  # Number of ticks during when agents cannot attack other agents
     tasks_path = None  # Path to tasks to use for training
     eval_mode = False # Run the postprocessor in the eval mode
     early_stop_agent_num = 8  # Stop the episode when the number of agents reaches this number
-    sqrt_achievement_rewards=False # Use the log of achievement rewards
-    heal_bonus_weight = 0.03
-    meander_bonus_weight = 0.02
-    explore_bonus_weight = 0.01
-    spawn_immunity = 20
+    detailed_stat = True
+
+    # Experimental args
+    one_combat_style = None  # whether to use only one combat style
+    augment_tile_obs = None  # whether to augment tile obs
+    limit_sell_mask = None  # whether to limit sell/give/destroy with fewer items
+    limit_buy_mask = None  # whether to limit buy relevant items
+    heuristic_use_mask = None  # whether to use a heuristic mask for use actions
+    use_new_bonus = None  # whether to use new bonus
+
+    # New bonus args
+    survival_mode_criteria = 35  # for health, food, water level
+    get_resource_criteria = 75  # for food and water
+    death_fog_criteria = 2  # fog damage
+    survival_heal_weight = 0.001  # * diff health level (max: 100)
+    survival_resource_weight = 0.06
+    get_resource_weight = 0.03
+    progress_bonus_weight = 0.10
+    runaway_bonus_weight = 0.02
+    progress_refractory_period = 5
+    meander_bonus_weight = 0.01
+    combat_bonus_weight = 0.001
+    upgrade_bonus_weight = 0.02
+    unique_event_bonus_weight = 0.01
+
+    # V1 bonus args
+    v1_heal_bonus_weight = 0.03
+    v1_meander_bonus_weight = 0.02
+    v1_explore_bonus_weight = 0.01
 
     # Policy Args
     input_size = 256

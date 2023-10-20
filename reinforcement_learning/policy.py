@@ -1,15 +1,11 @@
-import argparse
 import torch
 import torch.nn.functional as F
-from typing import Dict
 
 import pufferlib
 import pufferlib.emulation
 import pufferlib.models
 
-import nmmo
 from nmmo.entity.entity import EntityState
-
 EntityId = EntityState.State.attr_name_to_col["id"]
 
 
@@ -35,19 +31,34 @@ class Random(pufferlib.models.Policy):
 
 
 class Baseline(pufferlib.models.Policy):
-  def __init__(self, env, input_size=256, hidden_size=256, task_size=4096):
+  def __init__(self, env, input_size=256, hidden_size=256):
     super().__init__(env)
+    # NOTE: new obs encoder can be added like below
+    self.use_combat_obs = "Combat" in env.structured_observation_space
+    assert self.use_combat_obs is False, "Combat obs not supported yet"
 
     self.flat_observation_space = env.flat_observation_space
     self.flat_observation_structure = env.flat_observation_structure
 
-    self.tile_encoder = TileEncoder(input_size)
+    tile_attr_dim = env.structured_observation_space["Tile"].shape[1]
+    self.tile_encoder = TileEncoder(input_size, tile_attr_dim)
     self.player_encoder = PlayerEncoder(input_size, hidden_size)
+
+    # if self.use_combat_obs:
+    #     combat_dim = env.structured_observation_space["Combat"].shape[0]
+    #     self.combat_encoder = VectorEncoder(input_size, combat_dim)
+
     self.item_encoder = ItemEncoder(input_size, hidden_size)
     self.inventory_encoder = InventoryEncoder(input_size, hidden_size)
     self.market_encoder = MarketEncoder(input_size, hidden_size)
-    self.task_encoder = TaskEncoder(input_size, hidden_size, task_size)
-    self.proj_fc = torch.nn.Linear(5 * input_size, input_size)
+
+    task_dim = env.structured_observation_space["Task"].shape[0]
+    self.task_encoder = VectorEncoder(input_size, task_dim)
+
+    # see: obs = torch.cat(obs_list, dim=-1)
+    proj_fc_multiplier = 6 if self.use_combat_obs else 5
+
+    self.proj_fc = torch.nn.Linear(proj_fc_multiplier * input_size, input_size)
     self.action_decoder = ActionDecoder(input_size, hidden_size)
     self.value_head = torch.nn.Linear(hidden_size, 1)
 
@@ -67,7 +78,13 @@ class Baseline(pufferlib.models.Policy):
 
     task = self.task_encoder(env_outputs["Task"])
 
-    obs = torch.cat([tile, my_agent, inventory, market, task], dim=-1)
+    obs_list = [tile, my_agent, inventory, market, task]
+
+    # if self.use_combat_obs:
+    #     combat = self.combat_encoder(env_outputs["Combat"])
+    #     obs_list.append(combat)
+
+    obs = torch.cat(obs_list, dim=-1)  # len(obs_list) must match proj_fc_multiplier
     obs = self.proj_fc(obs)
 
     return obs, (
@@ -84,18 +101,20 @@ class Baseline(pufferlib.models.Policy):
 
 
 class TileEncoder(torch.nn.Module):
-  def __init__(self, input_size):
+  def __init__(self, input_size, tile_dim, embed_dim=32):
     super().__init__()
-    self.tile_offset = torch.tensor([i * 256 for i in range(3)])
-    self.embedding = torch.nn.Embedding(3 * 256, 32)
-
-    self.tile_conv_1 = torch.nn.Conv2d(96, 32, 3)
-    self.tile_conv_2 = torch.nn.Conv2d(32, 8, 3)
+    self.tile_dim = tile_dim
+    self.tile_offset = torch.tensor([i * 256 for i in range(tile_dim)])
+    self.embedding = torch.nn.Embedding(tile_dim * 256, embed_dim)
+    self.tile_conv_1 = torch.nn.Conv2d(tile_dim * embed_dim, embed_dim, kernel_size=3)
+    self.tile_conv_2 = torch.nn.Conv2d(embed_dim, 8, kernel_size=3)
     self.tile_fc = torch.nn.Linear(8 * 11 * 11, input_size)
 
   def forward(self, tile):
+    # row, col centering for each agent from -7 to 7. row 112 is the agent's position
     tile[:, :, :2] -= tile[:, 112:113, :2].clone()
-    tile[:, :, :2] += 7
+    # since the embedding clips the value to 0-255, we need to offset the values
+    tile[:, :, :2] += 7  # row & col
     tile = self.embedding(
         tile.long().clip(0, 255) + self.tile_offset.to(tile.device)
     )
@@ -219,13 +238,14 @@ class MarketEncoder(torch.nn.Module):
     return self.fc(market).mean(-2)
 
 
-class TaskEncoder(torch.nn.Module):
-  def __init__(self, input_size, hidden_size, task_size):
+# Used for Task and Combat
+class VectorEncoder(torch.nn.Module):
+  def __init__(self, input_size, vector_size):
     super().__init__()
-    self.fc = torch.nn.Linear(task_size, input_size)
+    self.fc = torch.nn.Linear(vector_size, input_size)
 
-  def forward(self, task):
-    return self.fc(task.clone())
+  def forward(self, vector):
+    return self.fc(vector.clone())
 
 
 class ActionDecoder(torch.nn.Module):
