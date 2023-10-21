@@ -94,7 +94,7 @@ class Config(nmmo.config.Default):
         self.set("HORIZON", args.max_episode_length)
         self.set("MAP_N", args.num_maps)
         self.set("PLAYER_DEATH_FOG", args.death_fog_tick)
-        self.set("PATH_MAPS", f"{args.maps_path}/{args.map_size}/")
+        self.set("PATH_MAPS", f"{args.maps_path}/seed_{args.seed}/")
         self.set("MAP_CENTER", args.map_size)
         self.set("NPC_N", args.num_npcs)
         self.set("CURRICULUM_FILE_PATH", args.tasks_path)
@@ -169,11 +169,11 @@ class Postprocessor(StatPostprocessor):
         combat_bonus_weight=0,
         upgrade_bonus_weight=0,
         unique_event_bonus_weight=0,
+        clip_unique_event=3,
         # Original (V1) bonus args
         v1_heal_bonus_weight=0,
         v1_meander_bonus_weight=0,
         v1_explore_bonus_weight=0,
-        clip_unique_event=3,
     ):
         super().__init__(env, agent_id, eval_mode, detailed_stat, early_stop_agent_num)
         self.config = env.config
@@ -203,12 +203,12 @@ class Postprocessor(StatPostprocessor):
         self.combat_bonus_weight = combat_bonus_weight
         self.upgrade_bonus_weight = upgrade_bonus_weight
         self.unique_event_bonus_weight = unique_event_bonus_weight
+        self.clip_unique_event = clip_unique_event
 
         # Original (V1) bonus args
         self.v1_heal_bonus_weight = v1_heal_bonus_weight
         self.v1_meander_bonus_weight = v1_meander_bonus_weight
         self.v1_explore_bonus_weight = v1_explore_bonus_weight
-        self.clip_unique_event = clip_unique_event
 
         # New stuff
         self._main_combat_skill = None
@@ -317,7 +317,7 @@ class Postprocessor(StatPostprocessor):
             obs["ActionTargets"]["Attack"]["Target"][-1] = 0
 
         # Mask out the last selected price
-        obs["ActionTargets"]["Sell"]["Price"][self._last_price] = 0
+        obs["ActionTargets"]["Sell"]["Price"][self._prev_price] = 0
 
         return obs
 
@@ -326,7 +326,6 @@ class Postprocessor(StatPostprocessor):
         obstacle = np.isin(obs["Tile"][:,2], IMPASSIBLE)
         food = obs["Tile"][:,2] == material.Foilage.index
         water = obs["Tile"][:,2] == material.Water.index
-        ammo = food  # dummy map
         if self.one_combat_style:
             ammo = obs["Tile"][:,2] == SKILL_TO_TILE_MAP[self._main_combat_skill]
 
@@ -344,7 +343,8 @@ class Postprocessor(StatPostprocessor):
                 ent_idx = np.where((obs["Tile"][:,0] == entity[EntityAttr["row"]]) &
                                    (obs["Tile"][:,1] == entity[EntityAttr["col"]]))[0]
                 food[ent_idx] = False
-                ammo[ent_idx] = False  # ammo == food when one_combat_style is False
+                if self.one_combat_style:
+                    ammo[ent_idx] = False
             else:
                 npc_type = entity[EntityAttr["npc_type"]]
                 self._entity_map[ent_pos] = max(npc_type, self._entity_map[ent_pos])
@@ -403,8 +403,8 @@ class Postprocessor(StatPostprocessor):
 
     def action(self, action):
         """Called before actions are passed from the model to the environment"""
-        self._last_moves.append(action[8])  # 8 is the index for move direction
-        self._last_price = action[10]  # 10 is the index for selling price
+        self._prev_moves.append(action[8])  # 8 is the index for move direction
+        self._prev_price = action[10]  # 10 is the index for selling price
         return action
 
     def reward_done_info(self, reward, done, info):
@@ -428,8 +428,8 @@ class Postprocessor(StatPostprocessor):
 
         # Add meandering bonus to encourage moving to various directions
         meander_bonus = 0
-        if len(self._last_moves) > 5:
-          move_entropy = calculate_entropy(self._last_moves[-8:])  # of last 8 moves
+        if len(self._prev_moves) > 5:
+          move_entropy = calculate_entropy(self._prev_moves[-8:])  # of last 8 moves
           meander_bonus = self.v1_meander_bonus_weight * (move_entropy - 1)
 
         # Unique event-based rewards, similar to exploration bonus
@@ -439,12 +439,57 @@ class Postprocessor(StatPostprocessor):
 
         return healing_bonus + meander_bonus + explore_bonus
 
+    def _original_plus_eat_bonus(self, agent):
+        assert self.use_new_bonus, "use_new_bonus must be True"
+        basic_bonus = 0
+        for idx, event_code in enumerate(BASIC_BONUS_EVENTS):
+            if self._prev_basic_events[idx] > 0:
+                if event_code == EventCode.EAT_FOOD:
+                    # progress and eat
+                    if self._curr_dist < self._prev_eat_dist:
+                        basic_bonus += self.progress_bonus_weight
+                        self._prev_eat_dist = self._curr_dist
+                    # eat when starve
+                    if self._prev_food_level <= self.survival_mode_criteria:
+                        basic_bonus += self.survival_resource_weight
+                    else:
+                        basic_bonus += self.get_resource_weight
+
+                if event_code == EventCode.DRINK_WATER:
+                    # progress and drink
+                    if self._curr_dist < self._prev_drink_dist:
+                        basic_bonus += self.progress_bonus_weight
+                        self._prev_drink_dist = self._curr_dist
+                    # drink when dehydrated
+                    if self._prev_water_level <= self.survival_mode_criteria:
+                        basic_bonus += self.survival_resource_weight
+                    else:
+                        basic_bonus += self.get_resource_weight
+
+        # Add "Healing" score based on health increase and decrease due to food and water
+        healing_bonus = 0
+        if agent.resources.health_restore > 0:
+            healing_bonus = self.v1_heal_bonus_weight
+
+        # Add meandering bonus to encourage moving to various directions
+        meander_bonus = 0
+        if len(self._prev_moves) > 5:
+          move_entropy = calculate_entropy(self._prev_moves[-8:])  # of last 8 moves
+          meander_bonus = self.v1_meander_bonus_weight * (move_entropy - 1)
+
+        # Unique event-based rewards, similar to exploration bonus
+        # The number of unique events are available in self._curr_unique_count, self._prev_unique_count
+        explore_bonus = min(self.clip_unique_event, self._curr_unique_count - self._prev_unique_count)
+        explore_bonus *= self.v1_explore_bonus_weight
+
+        return basic_bonus + healing_bonus + meander_bonus + explore_bonus
+
     def _new_bonus(self, agent):
         # Survival bonus: mainly heal bonus
         # NOTE: agents got addicted to this bonus under death fog, so added death fog criteria
         survival_bonus = 0
-        if self._last_health_level <= self.survival_mode_criteria and \
-            self._curr_death_fog < self.death_fog_criteria:
+        if self._prev_health_level <= self.survival_mode_criteria and \
+            self._curr_death_fog < self.death_fog_criteria:  # not under death fog
             # 10 in case of enough food/water, 50+ for potion
             survival_bonus += self.survival_heal_weight * agent.resources.health_restore
 
@@ -452,56 +497,55 @@ class Postprocessor(StatPostprocessor):
         progress_bonus = 0
         self._progress_refractory_counter -= 1
         for idx, event_code in enumerate(BASIC_BONUS_EVENTS):
-            if self._last_basic_events[idx] > 0:
+            if self._prev_basic_events[idx] > 0:
                 if event_code == EventCode.EAT_FOOD:
                     # progress and eat
-                    if self._curr_dist < self._last_eat_dist:
+                    if self._curr_dist < self._prev_eat_dist:
                         progress_bonus += self.progress_bonus_weight
-                        self._last_eat_dist = self._curr_dist
+                        self._prev_eat_dist = self._curr_dist
                     # eat when starve
-                    if self._last_food_level <= self.survival_mode_criteria:
+                    if self._prev_food_level <= self.survival_mode_criteria:
                         survival_bonus += self.survival_resource_weight
-                    elif self._last_food_level <= self.get_resource_criteria:
+                    elif self._prev_food_level <= self.get_resource_criteria:
                         # under death fog, priotize running away
-                        if self._curr_death_fog < self.death_fog_criteria:
+                        if self._curr_death_fog < self.death_fog_criteria:  # not under death fog
                             survival_bonus += self.get_resource_weight
 
                 if event_code == EventCode.DRINK_WATER:
                     # progress and drink
-                    if self._curr_dist < self._last_drink_dist:
+                    if self._curr_dist < self._prev_drink_dist:
                         progress_bonus += self.progress_bonus_weight
-                        self._last_drink_dist = self._curr_dist
+                        self._prev_drink_dist = self._curr_dist
                     # drink when dehydrated
-                    if self._last_water_level <= self.survival_mode_criteria:
+                    if self._prev_water_level <= self.survival_mode_criteria:
                         survival_bonus += self.survival_resource_weight
-                    elif self._last_water_level <= self.get_resource_criteria:
+                    elif self._prev_water_level <= self.get_resource_criteria:
                         # under death fog, priotize running away
-                        if self._curr_death_fog < self.death_fog_criteria:
+                        if self._curr_death_fog < self.death_fog_criteria:  # not under death fog
                             survival_bonus += self.get_resource_weight
 
                 # run away from death fog
                 if event_code == EventCode.GO_FARTHEST:
-                    if self._curr_death_fog > 0 or self._progress_refractory_counter <= 0:
+                    if 1 < self._curr_death_fog < self._prev_death_fog or \
+                       self._progress_refractory_counter <= 0:
                         progress_bonus += self.runaway_bonus_weight
                         self._progress_refractory_counter = self.progress_refractory_period
         # Run away from death fog (can get duplicate bonus, but worth rewarding)
-        if self._curr_dist < min(self._last_dist[-8:]):
-            if self._curr_death_fog > 0 or self._progress_refractory_counter <= 0:
+        if self._curr_dist < min(self._prev_dist[-8:]):
+            if 1 < self._curr_death_fog < self._prev_death_fog or self._progress_refractory_counter <= 0:
                 progress_bonus += self.runaway_bonus_weight
                 self._progress_refractory_counter = self.progress_refractory_period
 
         # Add meandering bonus to encourage meandering (to prevent entropy collapse)
         meander_bonus = 0
-        if len(self._last_moves) > 5:
-            move_entropy = calculate_entropy(self._last_moves[-8:])  # of last 8 moves
-            meander_bonus += self.meander_bonus_weight * (move_entropy - 1)
+        if len(self._prev_moves) > 5:
+            move_entropy = calculate_entropy(self._prev_moves[-8:])  # of last 8 moves
+            meander_bonus = self.meander_bonus_weight * (move_entropy - 1)
 
         # Add combat bonus to encourage combat activities that increase exp
-        combat_bonus = self.combat_bonus_weight * (self._curr_combat_exp - self._last_combat_exp)
+        #combat_bonus = self.combat_bonus_weight * (self._curr_combat_exp - self._prev_combat_exp)
 
         # Add upgrade bonus to encourage leveling up offense/defense
-        # NOTE: This can be triggered when a higher-level NPC drops an item that gets auto-equipped
-        # Thus, it can make agents more aggressive towards npcs & equip more items
         upgrade_bonus = self.upgrade_bonus_weight * (self._new_max_offense + self._new_max_defense)
 
         # Unique event-based rewards, similar to exploration bonus
@@ -510,40 +554,40 @@ class Postprocessor(StatPostprocessor):
                                  self.clip_unique_event) * self.unique_event_bonus_weight
 
         # Sum up all the bonuses. Under the survival mode, ignore some bonuses
-        bonus = survival_bonus + progress_bonus + upgrade_bonus
+        bonus = survival_bonus + progress_bonus + upgrade_bonus + meander_bonus
         if not self._survival_mode:
-            bonus += meander_bonus + combat_bonus + unique_event_bonus
+            bonus += unique_event_bonus
 
         return bonus
 
     def _reset_reward_vars(self):
         # Meander_bonus (to prevent entropy collapse)
-        self._last_moves = []
-        self._last_price = 0  # to encourage changing price
+        self._prev_moves = []
+        self._prev_price = 0  # to encourage changing price
 
         # Unique event bonus (also, exploreation bonus)
         self._prev_unique_count = self._curr_unique_count = 0
 
         if self.use_new_bonus:
             # Survival bonus: health, food, water level
-            self._last_health_level = self._curr_health_level = 100
-            self._last_food_level = self._curr_food_level = 100
-            self._last_water_level = self._curr_water_level = 100
-            self._curr_death_fog = 0
-            self._last_dist = []
+            self._prev_health_level = self._curr_health_level = 100
+            self._prev_food_level = self._curr_food_level = 100
+            self._prev_water_level = self._curr_water_level = 100
+            self._prev_death_fog = self._curr_death_fog = 0
+            self._prev_dist = []
             self._curr_dist = np.inf
             self._survival_mode = False
 
             # Progress bonuses: eat & progress, drink & progress, run away from the death fog
             # (reward when agents eat/drink the farthest so far)
             num_basic_events = len(BASIC_BONUS_EVENTS)
-            self._last_basic_events = np.zeros(num_basic_events, dtype=np.int16)
-            self._last_eat_dist = np.inf
-            self._last_drink_dist = np.inf
+            self._prev_basic_events = np.zeros(num_basic_events, dtype=np.int16)
+            self._prev_eat_dist = np.inf
+            self._prev_drink_dist = np.inf
             self._progress_refractory_counter = 0
 
             # main combat exp (or max of the three)
-            self._last_combat_exp = self._curr_combat_exp = 0
+            self._prev_combat_exp = self._curr_combat_exp = 0
 
             # equipment bonus (to level up offense/defense/ammo of the profession)
             self._max_offense = 0  # max melee/range/mage equipment offense so far
@@ -560,23 +604,24 @@ class Postprocessor(StatPostprocessor):
 
         if self.use_new_bonus:
             # From the agent
-            self._last_health_level = self._curr_health_level
+            self._prev_health_level = self._curr_health_level
             self._curr_health_level = agent.resources.health.val
-            self._last_food_level = self._curr_food_level
+            self._prev_food_level = self._curr_food_level
             self._curr_food_level = agent.resources.food.val
-            self._last_water_level = self._curr_water_level
+            self._prev_water_level = self._curr_water_level
             self._curr_water_level = agent.resources.water.val
-            self._curr_death_fog = self.env.realm.fog_map[agent.pos] if self._exist_fog_obs else 0  # TODO: calculate death fog
-            self._last_dist.append(self._curr_dist)
+            self._prev_death_fog = self._curr_death_fog
+            self._curr_death_fog = round(self.env.realm.fog_map[agent.pos]) if self._exist_fog_obs else 0  # TODO: calculate death fog
+            self._prev_dist.append(self._curr_dist)
             self._curr_dist = self._dist_map[agent.pos]
-            self._survival_mode = True if min(self._last_health_level,
-                                            self._last_food_level,
-                                            self._last_water_level) <= self.survival_mode_criteria or \
+            self._survival_mode = True if min(self._prev_health_level,
+                                            self._prev_food_level,
+                                            self._prev_water_level) <= self.survival_mode_criteria or \
                                         self._curr_death_fog >= self.death_fog_criteria \
                                         else False
 
             offense_dict, curr_defense = get_combat_attributes(self.config, agent)
-            self._last_combat_exp = self._curr_combat_exp
+            self._prev_combat_exp = self._curr_combat_exp
             if self.one_combat_style:
                 self._curr_combat_exp = getattr(agent.skills, self._main_combat_skill).exp.val
                 curr_offense = offense_dict[self._main_combat_skill]
@@ -595,7 +640,7 @@ class Postprocessor(StatPostprocessor):
             curr_tick = log[:, attr_to_col["tick"]] == self.env.realm.tick
             for idx, event_code in enumerate(BASIC_BONUS_EVENTS):
                 event_idx = curr_tick & (log[:, attr_to_col["event"]] == event_code)
-                self._last_basic_events[idx] = int(sum(event_idx) > 0)
+                self._prev_basic_events[idx] = int(sum(event_idx) > 0)
 
 def calculate_entropy(sequence):
     frequencies = Counter(sequence)

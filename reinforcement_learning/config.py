@@ -20,7 +20,7 @@ class Config:
     eval_batch_size = 2**15 # Number of steps to rollout for eval
     train_num_steps = 10_000_000  # Number of steps to train
     eval_num_steps = 1_000_000  # Number of steps to evaluate
-    checkpoint_interval = 80  # Interval to save models
+    checkpoint_interval = 10  # Interval to save models
     run_name = f"nmmo_{time.strftime('%Y%m%d_%H%M%S')}"  # Run name
     runs_dir = "/tmp/runs"  # Directory for runs
     policy_store_dir = None # Policy store directory
@@ -53,7 +53,7 @@ class Config:
     tasks_path = None  # Path to tasks to use for training
     eval_mode = False # Run the postprocessor in the eval mode
     early_stop_agent_num = 8  # Stop the episode when the number of agents reaches this number
-    detailed_stat = True
+    detailed_stat = False
 
     # Experimental args
     one_combat_style = None  # whether to use only one combat style
