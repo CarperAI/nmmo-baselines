@@ -179,12 +179,12 @@ class Postprocessor(StatPostprocessor):
         self.config = env.config
 
         # Experimental args
-        self.one_combat_style = one_combat_style
-        self.augment_tile_obs = augment_tile_obs
+        self.one_combat_style = one_combat_style  # mainly works on masks
+        self.augment_tile_obs = augment_tile_obs  # changes policy internal dims
         self.limit_sell_mask = limit_sell_mask
         self.limit_buy_mask = limit_buy_mask
         self.heuristic_use_mask = heuristic_use_mask
-        self.use_new_bonus = use_new_bonus
+        self.use_new_bonus = use_new_bonus  # affects checkpoint
 
         # Init reward vars
         self._reset_reward_vars()
@@ -280,6 +280,7 @@ class Postprocessor(StatPostprocessor):
         if self.limit_sell_mask:
             # Mask out Give, Destroy, Sell when there are less than 7 items
             # Without this, agents get rid of items and cannot learn to use and benefit from them
+            # TODO: destory or sell duplicated items
             num_item = sum(obs["Inventory"][:, ItemAttr["id"]] != 0)
             if num_item <= 7:
                 obs["ActionTargets"]["Sell"]["InventoryItem"] = self._noop_inventry_item

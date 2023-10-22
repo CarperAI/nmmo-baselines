@@ -5,7 +5,7 @@ import torch
 
 class Config:
     # Run a smaller config on your local machine
-    local_mode = False  # Run in local mode
+    local_mode = None  # Run in local mode
     # Track to run - options: reinforcement_learning, curriculum_generation
     track = "rl"
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -37,7 +37,7 @@ class Config:
     ppo_training_batch_size = 128  # Number of rows in a training batch
     ppo_update_epochs = 3  # Number of update epochs to use for training
     ppo_learning_rate = 0.00015  # Learning rate
-    anneal_lr = True  # Anneal learning rate
+    anneal_lr = None  # Anneal learning rate
     clip_coef = 0.1  # PPO clip coefficient
 
     # Environment Args
