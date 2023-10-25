@@ -451,6 +451,7 @@ class Postprocessor(StatPostprocessor):
         self._prev_basic_events = np.zeros(num_basic_events, dtype=np.int16)
         self._prev_food_level = self._curr_food_level = 100
         self._prev_water_level = self._curr_water_level = 100
+        self._prev_health_level = self._curr_health_level = 100
         self._prev_eat_dist = np.inf
         self._prev_drink_dist = np.inf
         self._curr_dist = np.inf
@@ -472,6 +473,8 @@ class Postprocessor(StatPostprocessor):
         self._curr_food_level = agent.resources.food.val
         self._prev_water_level = self._curr_water_level
         self._curr_water_level = agent.resources.water.val
+        self._prev_health_level = self._curr_health_level
+        self._curr_health_level = agent.resources.health.val
         self._curr_dist = self._dist_map[agent.pos]
 
 def calculate_entropy(sequence):
