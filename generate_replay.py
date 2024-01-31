@@ -332,7 +332,7 @@ if __name__ == "__main__":
         "--task-file",
         dest="task_file",
         type=str,
-        default="reinforcement_learning/eval_task_with_embedding.pkl",
+        default="evaluation/sample_eval_task_with_embedding.pkl",
         help="Task file to use for evaluation",
     )
     parser.add_argument(

@@ -159,7 +159,7 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
     def _update_stats(self, agent):
         task = self.env.agent_task_map[agent.ent_id][0]
         # For each task spec, record whether its max progress and reward count
-        self._curriculum[task.spec_name].append((task._max_progress, task.reward_signal_count))
+        self._curriculum[task.spec_name].append(task._max_progress)
         self._max_task_progress = task._max_progress
         if task.reward_signal_count >= 2:
             self._task_with_2_reward_signal = 1.0
@@ -278,7 +278,23 @@ class StatPostprocessor(pufferlib.emulation.Postprocessor):
             # "return" is used for ranking in the eval mode, so put the task progress here
             info["return"] = self._max_task_progress  # this is 1 if done
 
+        if self.is_env_done():
+            info["episode_done"] = True
+
         return reward, done, info
+
+    def is_env_done(self):
+        # Trigger only when the episode is done, and has the lowest agent id in agents
+        if self.agent_id > min(self.env.agents):
+            return False
+        if len(self.env.agents) <= self.early_stop_agent_num:  # early stop
+            return True
+        if self.env.realm.tick >= self.env.config.HORIZON:  # reached the end
+            return True
+        for player_id in self.env.agents:  # any alive agents?
+            if player_id in self.env.realm.players:
+                return False
+        return True
 
 # Event processing utilities for Neural MMO.
 
