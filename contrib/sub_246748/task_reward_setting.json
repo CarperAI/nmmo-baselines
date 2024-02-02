@@ -1,0 +1,266 @@
+{
+    "_key": "eval_fn",
+    "CountEvent": {
+        "_comment": "鼓励超额完成任务,因为验证场景需要数量更多",
+        "_key": "event",
+        "_default": {},
+        "EAT_FOOD": {
+            "log": {
+                "EAT_FOOD": 0.1
+            }
+        },
+        "DRINK_WATER": {
+            "log": {
+                "DRINK_WATER": 0.1
+            }
+        },
+        "SCORE_HIT": {
+            "log": {
+                "SCORE_HIT": 0.02
+            }
+        },
+        "PLAYER_KILL": {
+            "log": {
+                "PLAYER_KILL": 0.02
+            }
+        },
+        "HARVEST_ITEM": {
+            "log": {
+                "HARVEST_ITEM": 0.02
+            }
+        },
+        "EQUIP_ITEM": {
+            "log": {
+                "EQUIP_ITEM": 0.02
+            }
+        },
+        "CONSUME_ITEM": {
+            "log": {
+                "CONSUME_ITEM": 0.02
+            }
+        },
+        "LEVEL_UP": {
+            "log": {
+                "LEVEL_UP": 0.02
+            }
+        },
+        "EARN_GOLD": {
+            "log": {
+                "EARN_GOLD": 0.02
+            }
+        },
+        "LIST_ITEM": {
+            "log": {
+                "LIST_ITEM": 0.02
+            }
+        },
+        "BUY_ITEM": {
+            "log": {
+                "BUY_ITEM": 0.02
+            }
+        },
+        "GIVE_ITEM": {
+            "log": {
+                "GIVE_ITEM": 0.1
+            }
+        },
+        "DESTROY_ITEM": {
+            "log": {
+                "DESTROY_ITEM": 0.1
+            }
+        },
+        "GIVE_GOLD": {
+            "log": {
+                "GIVE_GOLD": 0.1
+            }
+        }
+    },
+    "CanSeeTile": {
+        "_comment": "鼓励逛街",
+        "_key": "tile_type",
+        "_default": {
+            "wander": {
+                "per_tile": 0.01
+            }
+        }
+    },
+    "AttainSkill": {
+        "_comment": "原始奖励已包含升级奖励，这里鼓励升级所需的攻击、收获行为",
+        "_key": "skill",
+        "_default": {},
+        "Melee": {
+            "attack": {
+                "Melee": 0.01
+            }
+        },
+        "Mage": {
+            "attack": {
+                "Mage": 0.01
+            }
+        },
+        "Range": {
+            "attack": {
+                "Range": 0.01
+            }
+        },
+        "Fishing": {
+            "harvest": {
+                "Fishing": 0.01
+            }
+        },
+        "Herbalism": {
+            "harvest": {
+                "Herbalism": 0.01
+            }
+        },
+        "Prospecting": {
+            "harvest": {
+                "Prospecting": 0.01
+            }
+        },
+        "Alchemy": {
+            "harvest": {
+                "Alchemy": 0.01
+            }
+        },
+        "Carving": {
+            "harvest": {
+                "Carving": 0.01
+            }
+        }
+    },
+    "OccupyTile": {
+        "_comment": "鼓励逛街",
+        "_key": "",
+        "_default": {
+            "wander_occupy": {
+                "per_tile": 0.0001
+            }
+        }
+    },
+    "EarnGold": {
+        "_comment": "鼓励任务以外继续赚钱",
+        "_key": "",
+        "_default": {
+            "log_value": {
+                "EARN_GOLD": 0.002
+            }
+        }
+    },
+    "SpendGold": {
+        "_comment": "鼓励赚钱",
+        "_key": "",
+        "_default": {
+            "log_value": {
+                "EARN_GOLD": 0.002
+            }
+        }
+    },
+    "MakeProfit": {
+        "_comment": "鼓励赚钱以增加购买力",
+        "_key": "",
+        "_default": {
+            "log_value": {
+                "EARN_GOLD": 0.002
+            }
+        }
+    },
+    "OwnItem": {
+        "_comment": "鼓励拥有 包括更低级的物品 使奖励更稠密",
+        "_key": "item",
+        "_default": {
+            "own": {
+                "": 0.01
+            }
+        },
+        "Hat": {
+            "own": {
+                "Hat": 0.1
+            }
+        },
+        "Top": {
+            "own": {
+                "Top": 0.1
+            }
+        },
+        "Bottom": {
+            "own": {
+                "Bottom": 0.1
+            }
+        },
+        "Spear": {
+            "own": {
+                "Spear": 0.1
+            }
+        },
+        "Bow": {
+            "own": {
+                "Bow": 0.1
+            }
+        },
+        "Wand": {
+            "own": {
+                "Wand": 0.1
+            }
+        },
+        "Axe": {
+            "own": {
+                "Axe": 0.1
+            }
+        },
+        "Gloves": {
+            "own": {
+                "Gloves": 0.1
+            }
+        },
+        "Rod": {
+            "own": {
+                "Rod": 0.1
+            }
+        },
+        "Pickaxe": {
+            "own": {
+                "Pickaxe": 0.1
+            }
+        },
+        "Chisel": {
+            "own": {
+                "Chisel": 0.1
+            }
+        },
+        "Runes": {
+            "own": {
+                "Runes": 0.1
+            }
+        },
+        "Arrow": {
+            "own": {
+                "Arrow": 0.1
+            }
+        },
+        "Whetstone": {
+            "own": {
+                "Whetstone": 0.1
+            }
+        },
+        "Potion": {
+            "own": {
+                "Potion": 0.1
+            }
+        },
+        "Ration": {
+            "own": {
+                "Ration": 0.1
+            }
+        }
+    },
+    "_todo": {
+        "PracticeSkillWithTool": "没找到eval_fn",
+        "TickGE": "实验如何延长生存时长",
+        "CanSeeAgent": "",
+        "CanSeeGroup": "",
+        "ScoreHit": "默认自带攻击奖励",
+        "HoardGold": "囤积金币，默认有过程奖励",
+        "PracticeInventoryManagement": ""
+    }
+}

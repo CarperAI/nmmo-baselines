@@ -7,6 +7,10 @@ def get_train_helper(policy_name, debug=False):
         return get_train_helper_baseline(debug)
     elif policy_name == "246505":
         import contrib.sub_246505 as submission
+    elif policy_name == "246539":
+        import contrib.sub_246539 as submission
+    elif policy_name == "246748":
+        import contrib.sub_246748 as submission
     else:
         raise ValueError(f"Unknown policy name: {policy_name}")
     return submission.get_train_helper(debug)
@@ -47,7 +51,6 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-
     debug_flag = False
     time_limit_sec = args.time_limit_sec
     if args.debug_mode:

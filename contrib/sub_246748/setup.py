@@ -2,14 +2,14 @@ from train_helper import TrainHelper, get_config_args, BASELINE_CURRICULUM_FILE
 from pufferlib.frameworks import cleanrl
 
 def get_train_helper(debug=False):
-    run_prefix = "s246505"
-    from . import environment, config, clean_pufferl
-    from . import policy_yaofeng1998 as policy
+    run_prefix = "s246748"
+    from . import environment, config, policy
+    from reinforcement_learning import clean_pufferl
 
     args = get_config_args(config, BASELINE_CURRICULUM_FILE, debug)
 
     def make_policy(envs):
-        learner_policy = policy.Baseline(
+        learner_policy = policy.ReducedModelV2(
             envs.driver_env,
             input_size=args.input_size,
             hidden_size=args.hidden_size,
@@ -17,7 +17,7 @@ def get_train_helper(debug=False):
         )
         return cleanrl.Policy(learner_policy)
 
-    policy_file = "contrib/sub_246505/policy_yaofeng1998.py"
+    policy_file = "contrib/sub_246748/policy.py"
     with open(policy_file, "r") as f:
         policy_src = f.read()
 
@@ -34,7 +34,7 @@ def make_policy():
     from pufferlib.frameworks import cleanrl
     env = pufferlib.emulation.PettingZooPufferEnv(nmmo.Env(Config()))
     # Parameters to your model should match your configuration
-    learner_policy = Baseline(
+    learner_policy = ReducedModelV2(
         env,
         input_size={args.input_size},
         hidden_size={args.input_size},

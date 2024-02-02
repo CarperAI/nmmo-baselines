@@ -280,7 +280,7 @@ class CleanPuffeRL:
             )
 
     @pufferlib.utils.profile
-    def evaluate(self, show_progress=True):
+    def evaluate(self, show_progress=False):
         is_recurrent = self.selfplay_learner_weight > 0.0
         # Pick new policies for the policy pool
         # TODO: find a way to not switch mid-stream
