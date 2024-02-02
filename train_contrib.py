@@ -1,16 +1,15 @@
 import logging
 import argparse
+import importlib
+
+import contrib
 from train_helper import get_train_helper_baseline
 
 def get_train_helper(policy_name, debug=False):
     if policy_name == "baseline":
         return get_train_helper_baseline(debug)
-    elif policy_name == "246505":
-        import contrib.sub_246505 as submission
-    elif policy_name == "246539":
-        import contrib.sub_246539 as submission
-    elif policy_name == "246748":
-        import contrib.sub_246748 as submission
+    elif policy_name in contrib.TESTED:
+        submission = importlib.import_module(f"contrib.sub_{policy_name}")
     else:
         raise ValueError(f"Unknown policy name: {policy_name}")
     return submission.get_train_helper(debug)
@@ -21,33 +20,49 @@ if __name__ == "__main__":
     parser.add_argument(
         "-p",
         "--policy",
-        dest="policy_to_train",
-        type=str,
-        default="baseline",
-        help="Policy to train (Default: baseline)",
+        dest = "policy_to_train",
+        type = str,
+        nargs = "+",
+        default = ["baseline"],
+        help = "A list of policies to train (Default: baseline)",
+    )
+    parser.add_argument(
+        "-a",
+        "--train_all",
+        dest = "train_all",
+        action = "store_true",
+        help = "Train all models (Default: False)",
     )
     parser.add_argument(
         "-s",
         "--seed",
-        dest="seed",
-        type=int,
-        default=None,
-        help="Random integer seed (Default: None, which uses the seed specified in the config file)",
+        dest = "seed",
+        type = int,
+        default = None,
+        help = "Random integer seed (Default: None, which uses the seed specified in the config file)",
     )
     parser.add_argument(
         "-t",
         "--time-limit",
-        dest="time_limit_sec",
-        type=int,
-        default=8 * 3600,
-        help="Training time limit in seconds (Default: 8 hours)",
+        dest = "time_limit_sec",
+        type = int,
+        default = 8 * 3600,
+        help = "Training time limit in seconds (Default: 8 hours)",
     )
     parser.add_argument(
         "-d",
         "--debug",
-        dest="debug_mode",
-        action="store_true",
-        help="Debug mode (Default: False)",
+        dest = "debug_mode",
+        action = "store_true",
+        help = "Debug mode (Default: False)",
+    )
+    parser.add_argument(
+        "-i",
+        "--run-identifier",
+        dest = "run_identifier",
+        type = str,
+        default = None,
+        help = "Pre-fix to attach to run names (Default: None)",
     )
 
     args = parser.parse_args()
@@ -58,5 +73,14 @@ if __name__ == "__main__":
         time_limit_sec = 30
         logging.info("Running in debug mode")
 
-    train_helper = get_train_helper(args.policy_to_train, debug=debug_flag)
-    train_helper.run(args.seed, time_limit_sec)
+    if len(args.policy_to_train) == 0 and not args.train_all:
+        raise ValueError("No policies to train")
+    policy_to_train = args.policy_to_train
+    if args.train_all:
+        policy_to_train = contrib.TESTED + ["baseline"]
+
+    for pol in policy_to_train:
+        train_helper = get_train_helper(pol, debug=debug_flag)
+        if args.run_identifier:
+            train_helper.run_prefix = args.run_identifier + "_" + train_helper.run_prefix
+        train_helper.run(args.seed, time_limit_sec)

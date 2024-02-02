@@ -1,8 +1,10 @@
 from train_helper import TrainHelper, get_config_args, BASELINE_CURRICULUM_FILE
 from pufferlib.frameworks import cleanrl
 
+SUBMISSION_ID = "246748"
+
 def get_train_helper(debug=False):
-    run_prefix = "s246748"
+    run_prefix = f"s{SUBMISSION_ID}"
     from . import environment, config, policy
     from reinforcement_learning import clean_pufferl
 
@@ -17,10 +19,12 @@ def get_train_helper(debug=False):
         )
         return cleanrl.Policy(learner_policy)
 
-    policy_file = "contrib/sub_246748/policy.py"
+    policy_file = f"contrib/sub_{SUBMISSION_ID}/policy.py"
     with open(policy_file, "r") as f:
         policy_src = f.read()
 
+    # NOTE: For the PvP eval to work correctly, any custom components, like network blocks, etc,
+    #       must be included in the policy file.
     policy_src += f"""
 
 class Config(nmmo.config.Default):
@@ -44,8 +48,19 @@ def make_policy():
 
 """
 
+    train_kwargs = {
+        "update_epochs": args.ppo_update_epochs,
+        "bptt_horizon": args.bptt_horizon,
+        "batch_rows": args.ppo_training_batch_size // args.bptt_horizon,
+        "clip_coef": args.clip_coef,
+        "clip_vloss": not args.no_clip_vloss,
+        "ent_coef": args.ent_coef,
+        "vf_coef": args.vf_coef,
+    }
+
     return TrainHelper(run_prefix, args,
                        environment.make_env_creator,
                        make_policy,
                        clean_pufferl.CleanPuffeRL,
-                       policy_src)
+                       policy_src,
+                       train_kwargs)

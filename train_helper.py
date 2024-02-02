@@ -17,7 +17,7 @@ CONST_ARGS = {
     "device": "cuda",
     "num_envs": 6,
     "num_buffers": 2,
-    "train_num_steps": 100_000_000,  # training will stop early
+    "train_num_steps": 30_000_000,  # training will stop early
     "checkpoint_interval": 100,
     "runs_dir": "/tmp/runs",
     "wandb_entity": "kywch",
@@ -29,11 +29,15 @@ CONST_ARGS = {
 }
 
 
-def get_config_args(config_module, curriculum_file, debug=False):
+def get_config_args(config_module, curriculum_file=None, debug=False, cli_args=False):
     args = SimpleNamespace(**config_module.Config.asdict())
     for k, v in CONST_ARGS.items():
         setattr(args, k, v)
-    args.tasks_path = curriculum_file
+    if curriculum_file:
+        args.tasks_path = curriculum_file
+    if cli_args:
+        # This overrides all the above, and can get the args from the command line
+        args = config_module.create_config(config_module.Config)
     if debug:
         args.num_envs = 1
         args.num_buffers = 1

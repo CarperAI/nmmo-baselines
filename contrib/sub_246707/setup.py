@@ -1,7 +1,7 @@
 from train_helper import TrainHelper, get_config_args, BASELINE_CURRICULUM_FILE
 from pufferlib.frameworks import cleanrl
 
-SUBMISSION_ID = "246539"
+SUBMISSION_ID = "246707"
 
 def get_train_helper(debug=False):
     run_prefix = f"s{SUBMISSION_ID}"
@@ -11,7 +11,7 @@ def get_train_helper(debug=False):
     args = get_config_args(config, BASELINE_CURRICULUM_FILE, debug)
 
     def make_policy(envs):
-        learner_policy = policy.BaselineNew(
+        learner_policy = policy.Baseline(
             envs.driver_env,
             input_size=args.input_size,
             hidden_size=args.hidden_size,
@@ -38,7 +38,7 @@ def make_policy():
     from pufferlib.frameworks import cleanrl
     env = pufferlib.emulation.PettingZooPufferEnv(nmmo.Env(Config()))
     # Parameters to your model should match your configuration
-    learner_policy = BaselineNew(
+    learner_policy = Baseline(
         env,
         input_size={args.input_size},
         hidden_size={args.input_size},

@@ -1,8 +1,10 @@
 from train_helper import TrainHelper, get_config_args, BASELINE_CURRICULUM_FILE
 from pufferlib.frameworks import cleanrl
 
+SUBMISSION_ID = "246505"
+
 def get_train_helper(debug=False):
-    run_prefix = "s246505"
+    run_prefix = f"s{SUBMISSION_ID}"
     from . import environment, config, policy, clean_pufferl
 
     args = get_config_args(config, BASELINE_CURRICULUM_FILE, debug)
@@ -16,10 +18,12 @@ def get_train_helper(debug=False):
         )
         return cleanrl.Policy(learner_policy)
 
-    policy_file = "contrib/sub_246505/policy.py"
+    policy_file = f"contrib/sub_{SUBMISSION_ID}/policy.py"
     with open(policy_file, "r") as f:
         policy_src = f.read()
 
+    # NOTE: For the PvP eval to work correctly, any custom components, like network blocks, etc,
+    #       must be included in the policy file.
     policy_src += f"""
 
 class Config(nmmo.config.Default):

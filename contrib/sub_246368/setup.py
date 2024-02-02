@@ -1,17 +1,16 @@
 from train_helper import TrainHelper, get_config_args, BASELINE_CURRICULUM_FILE
 from pufferlib.frameworks import cleanrl
 
-SUBMISSION_ID = "246539"
+SUBMISSION_ID = "246368"
 
 def get_train_helper(debug=False):
     run_prefix = f"s{SUBMISSION_ID}"
-    from . import environment, config, policy
-    from reinforcement_learning import clean_pufferl
+    from . import environment, config, policy, clean_pufferl
 
     args = get_config_args(config, BASELINE_CURRICULUM_FILE, debug)
 
     def make_policy(envs):
-        learner_policy = policy.BaselineNew(
+        learner_policy = policy.Baseline(
             envs.driver_env,
             input_size=args.input_size,
             hidden_size=args.hidden_size,
@@ -38,7 +37,7 @@ def make_policy():
     from pufferlib.frameworks import cleanrl
     env = pufferlib.emulation.PettingZooPufferEnv(nmmo.Env(Config()))
     # Parameters to your model should match your configuration
-    learner_policy = BaselineNew(
+    learner_policy = Baseline(
         env,
         input_size={args.input_size},
         hidden_size={args.input_size},
@@ -48,8 +47,20 @@ def make_policy():
 
 """
 
+    train_kwargs = {
+        "update_epochs": args.ppo_update_epochs,
+        "bptt_horizon": args.bptt_horizon,
+        "batch_rows": args.ppo_training_batch_size // args.bptt_horizon,
+        "clip_coef": args.clip_coef,
+        "clip_vloss": args.clip_vloss,
+        "ent_coef": args.ent_coef,
+        "vf_coef": args.vf_coef,
+        "max_grad_norm": args.max_grad_norm,
+    }
+
     return TrainHelper(run_prefix, args,
                        environment.make_env_creator,
                        make_policy,
                        clean_pufferl.CleanPuffeRL,
-                       policy_src)
+                       policy_src,
+                       train_kwargs)
