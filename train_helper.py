@@ -17,6 +17,8 @@ CONST_ARGS = {
     "device": "cuda",
     "num_envs": 6,
     "num_buffers": 2,
+    "train_num_steps": 100_000_000,  # training will stop early
+    "checkpoint_interval": 100,
     "runs_dir": "/tmp/runs",
     "wandb_entity": "kywch",
     "wandb_project":"nmmo-contrib",
