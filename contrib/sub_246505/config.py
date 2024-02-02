@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 import time
 import torch
 
@@ -12,31 +13,32 @@ class Config:
     #record_loss = False  # log all minibatch loss and actions, for debugging
 
     # Trainer Args
-    seed = 475
+    seed = 625
     num_cores = None  # Number of cores to use for training
-    num_envs = 6  # Number of environments to use for training
-    num_buffers = 2  # Number of buffers to use for training
-    rollout_batch_size = 2**15 # Number of steps to rollout
-    eval_batch_size = 2**15 # Number of steps to rollout for eval
-    train_num_steps = 10_000_000  # Number of steps to train
-    eval_num_steps = 1_000_000  # Number of steps to evaluate
-    checkpoint_interval = 30  # Interval to save models
-    run_name = f"nmmo_{time.strftime('%Y%m%d_%H%M%S')}"  # Run name
-    runs_dir = "/tmp/runs"  # Directory for runs
+    num_envs = 8  # Number of environments to use for training
+    num_buffers = 1  # Number of buffers to use for training
+    rollout_batch_size = 32768 # Number of steps to rollout
+    eval_batch_size = 1500000 # Number of steps to rollout for eval
+    train_num_steps = 15_000_000  # Number of steps to train
+    eval_num_steps = 1500_000  # Number of steps to evaluate
+    checkpoint_interval = 10  # Interval to save models
+    run_name = ""  # Run name
+    runs_dir = "./runs"  # Directory for runs
     policy_store_dir = None # Policy store directory
     use_serial_vecenv = False  # Use serial vecenv implementation
     learner_weight = 1.0  # Weight of learner policy
     max_opponent_policies = 0  # Maximum number of opponent policies to train against
     eval_num_policies = 2 # Number of policies to use for evaluation
     eval_num_rounds = 1 # Number of rounds to use for evaluation
-    wandb_project = None  # WandB project name
-    wandb_entity = None  # WandB entity name
+    wandb_project = "nmmo"  # WandB project name
+    wandb_entity = "diffusion-rlhf"  # WandB entity name
+    wandb_offline = False # Use online WandB
 
     # PPO Args
-    bptt_horizon = 8  # Train on this number of steps of a rollout at a time. Used to reduce GPU memory.
+    bptt_horizon = 128  # Train on this number of steps of a rollout at a time. Used to reduce GPU memory.
     ppo_training_batch_size = 128  # Number of rows in a training batch
-    ppo_update_epochs = 3  # Number of update epochs to use for training
-    ppo_learning_rate = 0.00015  # Learning rate
+    ppo_update_epochs = 2  # Number of update epochs to use for training
+    ppo_learning_rate = 0.0001  # Learning rate
     clip_coef = 0.1  # PPO clip coefficient
 
     # Environment Args
@@ -44,18 +46,24 @@ class Config:
     num_npcs = 256  # Number of NPCs to use for training
     max_episode_length = 1024  # Number of steps per episode
     death_fog_tick = None  # Number of ticks before death fog starts
-    num_maps = 128  # Number of maps to use for training
+    num_maps = 1024  # Number of maps to use for training
     maps_path = "maps/train/"  # Path to maps to use for training
     map_size = 128  # Size of maps to use for training
-    resilient_population = 0.2  # Percentage of agents to be resilient to starvation/dehydration
+    resilient_population = 0.0  # Percentage of agents to be resilient to starvation/dehydration
     tasks_path = None  # Path to tasks to use for training
     eval_mode = False # Run the postprocessor in the eval mode
     early_stop_agent_num = 8  # Stop the episode when the number of agents reaches this number
-    sqrt_achievement_rewards=False # Use the log of achievement rewards
-    heal_bonus_weight = 0.03
-    meander_bonus_weight = 0.02
-    explore_bonus_weight = 0.01
+    sqrt_achievement_rewards = False # Use the log of achievement rewards
+    meander_bonus_weight = 0.0
+    explore_bonus_weight = 0.0
+    hp_bonus_weight = 0.03
+    exp_bonus_weight = 0.002
+    defense_bonus_weight = 0.04
+    attack_bonus_weight = 0.0
+    gold_bonus_weight = 0.001
+    custom_bonus_scale = 0.1
     spawn_immunity = 20
+    reset_spawn_immunity = True
 
     # Policy Args
     input_size = 256
@@ -91,4 +99,11 @@ def create_config(config_cls):
             help=f"{arg_name} (default: {value})"
         )
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    if len(args.run_name) == 0:
+        run_name = [item.replace("--", "") for item in sys.argv[1:] if not item.startswith("--device")]
+        args.run_name = "_".join(run_name)
+        # args.run_name = f"nmmo_{time.strftime('%Y%m%d_%H%M%S')}"
+    if len(args.run_name) == 0:
+        args.run_name = "default"
+    return args
