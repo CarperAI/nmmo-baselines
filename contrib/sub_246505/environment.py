@@ -160,9 +160,9 @@ class Postprocessor(StatPostprocessor):
 
         reward, done, info = super().reward_done_info(reward, done, info)
         custom_reward, custom_info = self.get_custom_reward()
-        if self.agent_id in self.env.realm.players:
-            info["bonus/task"] = reward
-        info |= custom_info
+        # if self.agent_id in self.env.realm.players:
+        #     info["bonus/task"] = reward
+        # info |= custom_info
         reward = reward + self.custom_bonus_scale * custom_reward
 
         if done:
