@@ -3,11 +3,11 @@ import argparse
 import importlib
 
 import contrib
-from train_helper import get_train_helper_baseline
+import train_helper
 
 def get_train_helper(policy_name, debug=False):
     if policy_name == "baseline":
-        return get_train_helper_baseline(debug)
+        return train_helper.get_train_helper_baseline(debug)
     elif policy_name in contrib.TESTED:
         submission = importlib.import_module(f"contrib.sub_{policy_name}")
     else:
@@ -76,6 +76,10 @@ if __name__ == "__main__":
     if len(args.policy_to_train) == 0 and not args.train_all:
         raise ValueError("No policies to train")
     policy_to_train = args.policy_to_train
+
+    # Check if MAX_NUM_MAPS (1024) maps are available, and generate these if not
+    train_helper.check_maps()
+
     if args.train_all:
         policy_to_train = contrib.TESTED + ["baseline"]
 

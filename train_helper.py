@@ -13,11 +13,12 @@ from pufferlib.frameworks import cleanrl
 BASELINE_CURRICULUM_FILE = "reinforcement_learning/curriculum_with_embedding.pkl"
 
 # args to override
+MAX_NUM_MAPS = 1024
 CONST_ARGS = {
     "device": "cuda",
     "num_envs": 6,
     "num_buffers": 2,
-    "train_num_steps": 30_000_000,  # training will stop early
+    "train_num_steps": 25_000_000,  # training will stop early
     "checkpoint_interval": 100,
     "runs_dir": "/tmp/runs",
     "wandb_entity": "kywch",
@@ -25,14 +26,23 @@ CONST_ARGS = {
     # NOTE: check if different settings for maps were used
     "maps_path": "maps/train/",
     "map_size": 128,
-    "num_maps": 1024,  # top submissions used larger number of maps
 }
 
+def check_maps():
+    import nmmo
+    class MapConfig(nmmo.config.Default):
+        MAP_FORCE_GENERATION = False
+        MAX_CENTER = CONST_ARGS["map_size"]
+        PATH_MAPS = f"{CONST_ARGS['maps_path']}/{CONST_ARGS['map_size']}/"
+        MAP_N = MAX_NUM_MAPS
+    # NOTE: this will generate 1024 maps, if not already generated in the path
+    nmmo.Env(MapConfig())
 
 def get_config_args(config_module, curriculum_file=None, debug=False, cli_args=False):
     args = SimpleNamespace(**config_module.Config.asdict())
     for k, v in CONST_ARGS.items():
         setattr(args, k, v)
+    args.num_maps = min(args.num_maps, MAX_NUM_MAPS)
     if curriculum_file:
         args.tasks_path = curriculum_file
     if cli_args:
