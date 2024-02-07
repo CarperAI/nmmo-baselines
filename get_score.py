@@ -95,7 +95,7 @@ def process_batch_pve_score(batch_dir):
         if not os.path.isdir(sub_path):
             continue
         eval_files = os.listdir(sub_path)
-        if len([f for f in eval_files if f.endswith(".json")]) == 0:  # no eval results
+        if len([f for f in eval_files if f.endswith(".json")]) < 2:  # insufficient eval results
             continue
         policy_file = [f for f in eval_files if f.endswith(".pt") or f.endswith(".pkl")][0]
         sub_results = {
