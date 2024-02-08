@@ -12,7 +12,7 @@ class Config:
     #record_loss = False  # log all minibatch loss and actions, for debugging
 
     # Trainer Args
-    seed = 600  # bast600 700
+    seed = 127  # 600  # bast600 700
     num_cores = None  # Number of cores to use for training
     num_envs = 6  # Number of environments to use for training  6
     num_buffers = 2  # Number of buffers to use for training  2
