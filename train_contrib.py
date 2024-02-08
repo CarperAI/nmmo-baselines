@@ -77,9 +77,6 @@ if __name__ == "__main__":
         raise ValueError("No policies to train")
     policy_to_train = args.policy_to_train
 
-    # Check if MAX_NUM_MAPS (1024) maps are available, and generate these if not
-    train_helper.check_maps()
-
     if args.train_all:
         policy_to_train = contrib.TESTED + ["baseline"]
 

@@ -1,6 +1,7 @@
 import os
 import time
 import pickle
+import shutil
 import logging
 from types import SimpleNamespace
 from typing import Callable
@@ -13,7 +14,6 @@ from pufferlib.frameworks import cleanrl
 BASELINE_CURRICULUM_FILE = "reinforcement_learning/curriculum_with_embedding.pkl"
 
 # args to override
-MAX_NUM_MAPS = 1024
 CONST_ARGS = {
     "device": "cuda",
     "num_envs": 6,
@@ -28,21 +28,10 @@ CONST_ARGS = {
     "map_size": 128,
 }
 
-def check_maps():
-    import nmmo
-    class MapConfig(nmmo.config.Default):
-        MAP_FORCE_GENERATION = False
-        MAX_CENTER = CONST_ARGS["map_size"]
-        PATH_MAPS = f"{CONST_ARGS['maps_path']}/{CONST_ARGS['map_size']}/"
-        MAP_N = MAX_NUM_MAPS
-    # NOTE: this will generate 1024 maps, if not already generated in the path
-    nmmo.Env(MapConfig())
-
 def get_config_args(config_module, curriculum_file=None, debug=False, cli_args=False):
     args = SimpleNamespace(**config_module.Config.asdict())
     for k, v in CONST_ARGS.items():
         setattr(args, k, v)
-    args.num_maps = min(args.num_maps, MAX_NUM_MAPS)
     if curriculum_file:
         args.tasks_path = curriculum_file
     if cli_args:
@@ -80,6 +69,8 @@ class TrainHelper:
                 "batch_rows": args.ppo_training_batch_size // args.bptt_horizon,
                 "clip_coef": args.clip_coef,
             }
+        # Delete the map directory to force generate new maps
+        shutil.rmtree(f"{args.maps_path}/{args.map_size}/")
 
     def _make_trainer(self, seed=None):
         args = self.args
@@ -131,7 +122,11 @@ class TrainHelper:
         )
 
     def _save_final_policy(self, trainer):
-        trainer._save_checkpoint()
+        try:
+            trainer._save_checkpoint()
+        except ValueError:
+            # The same checkpoint has been already saved
+            pass
         policies = trainer.policy_store._all_policies()
         keys = list(policies.keys())
         keys.sort()
@@ -145,8 +140,8 @@ class TrainHelper:
             pickle.dump(checkpoint, out_file)
 
     def run(self, seed=None, time_limit_sec=8 * 3600):  # 8 hours
-        trainer = self._make_trainer(seed)
         start_time = time.time()
+        trainer = self._make_trainer(seed)
         while not trainer.done_training():
             trainer.evaluate()
             trainer.train(**self.train_kwargs)
