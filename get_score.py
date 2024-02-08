@@ -28,8 +28,8 @@ def get_task_weight(task_name):
     for key, val in WEIGHT_DICT.items():
         if key in task_name:
             return val
-    return None, 0
-    #raise ValueError(f"Task name {task_name} not found in weight dict")
+    #return None, 0
+    raise ValueError(f"Task name {task_name} not found in weight dict")
 
 def summarize_single_eval(data, weighted_score=False):
     # get the mean, and quantile values for each
@@ -50,7 +50,7 @@ def summarize_single_eval(data, weighted_score=False):
             category, weight = get_task_weight(key)
             summary[key]["category"] = category
             summary[key]["weight"] = weight
-            summary[key]["weighted_score"] = summary[key]["completed"] * weight
+            summary[key]["weighted_score"] = summary[key]["mean"] * weight
     # meta info
     summary["avg_progress"] = np.mean([v["mean"] for k, v in summary.items()
                                        if k.startswith("curriculum")])
