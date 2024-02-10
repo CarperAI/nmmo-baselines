@@ -3,11 +3,11 @@ import argparse
 import importlib
 
 import contrib
-import train_helper
+import train_helper as th
 
 def get_train_helper(policy_name, debug=False):
     if policy_name == "baseline":
-        return train_helper.get_train_helper_baseline(debug)
+        return th.get_train_helper_baseline(debug)
     elif policy_name in contrib.TESTED:
         submission = importlib.import_module(f"contrib.sub_{policy_name}")
     else:
