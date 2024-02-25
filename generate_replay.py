@@ -102,6 +102,13 @@ def save_replays(policy_store_dir, save_dir, curriculum_file, task_to_assign=Non
     replay_helper = FileReplayHelper()
     nmmo_env = evaluator.buffers[0].envs[0].envs[0].env
     nmmo_env.realm.record_replay(replay_helper)
+    # Replace the names of the agents with the policy names
+    # TODO: Get the id-to-name mapping from the evaluator or policy pool
+    if len(evaluator.policy_pool._policies) > 2:
+        for samp, (policy_name, _) in zip(evaluator.policy_pool._sample_idxs, evaluator.policy_pool._policies.items()):
+            for idx in samp:
+                agent_id = nmmo_env.possible_agents[idx]
+                nmmo_env.realm.players[agent_id].name = policy_name + '_' + str(agent_id)
 
     if task_to_assign is not None:
         with open(curriculum_file, 'rb') as f:
