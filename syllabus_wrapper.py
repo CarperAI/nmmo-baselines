@@ -1,20 +1,117 @@
 """Syllabus task wrapper for NMMO."""
 
-import gymnasium as gym
-from nmmo.lib.material import Harvestable
-from nmmo.task import base_predicates as bp
-from nmmo.systems import item as i
-from nmmo.entity import entity as e
-from nmmo.task import task_spec
-from nmmo.task.base_predicates import StayAlive
-from nmmo.task.task_api import OngoingTask
-
-from syllabus.core import MultiagentSharedCurriculumWrapper, make_multiprocessing_curriculum
-from syllabus.curricula import SequentialCurriculum
-from syllabus.core.task_interface import PettingZooTaskWrapper
-from syllabus.task_space import TaskSpace
-
+import numpy as np
+import torch
+import copy
+from collections import defaultdict
 from reinforcement_learning import environment
+from syllabus.task_space import TaskSpace
+from syllabus.core.evaluator import CleanRLDiscreteEvaluator, Evaluator
+from syllabus.core.task_interface import PettingZooTaskWrapper
+from syllabus.curricula import SequentialCurriculum, PrioritizedLevelReplay
+from syllabus.core import MultiagentSharedCurriculumWrapper, make_multiprocessing_curriculum
+from nmmo.task.task_api import OngoingTask
+from nmmo.task.base_predicates import StayAlive
+from nmmo.task import task_spec
+from nmmo.entity import entity as e
+from nmmo.systems import item as i
+from nmmo.task import base_predicates as bp
+from nmmo.lib.material import Harvestable
+import gymnasium as gym
+from pufferlib.extensions import flatten
+
+
+def concatenate(flat_sample):
+    # TODO: This section controls whether to special-case
+    # pure tensor obs to retain shape. Consider whether this is good.
+    if len(flat_sample) == 1:
+        flat_sample = flat_sample[0]
+        if isinstance(flat_sample, (np.ndarray, gym.wrappers.frame_stack.LazyFrames)):
+            return flat_sample
+        return np.array([flat_sample])
+
+    return np.concatenate([e.ravel() if isinstance(e, np.ndarray) else np.array([e]) for e in flat_sample])
+
+
+def pad_agent_data(data, agents, pad_value):
+    return {agent: data[agent] if agent in data else pad_value
+            for agent in agents}
+
+
+class PufferEvaluator(Evaluator):
+    def __init__(self, agent, possible_agents, pad_obs, *args, **kwargs):
+        super().__init__(agent, *args, **kwargs)
+        self.possible_agents = possible_agents
+        self.pad_obs = pad_obs
+        # Make cpu copy of model
+        if agent is not None:
+            self.set_agent(agent)
+
+    def set_agent(self, agent):
+        print("Setting agent", agent)
+        original_device = "cuda"
+        agent.to(self.device)
+        self.agent = copy.deepcopy(agent)
+        agent.to(original_device)
+        self._agent_reference = agent
+
+    def _update_agent(self):
+        self.agent.load_state_dict(self._agent_reference.state_dict())
+
+    def _get_value(self, state, lstm_state=None, done=None):
+        self._check_inputs(lstm_state, done)
+        _, _, _, value, lstm_state = self.agent.forward(
+            state, lstm_state
+        )
+        # Reshape back into n_envs x n_agents
+        value = torch.reshape(value, (-1, len(self.possible_agents)))
+        # Average over agents into n_envs x 1
+        value = torch.mean(value, -1).unsqueeze(-1)
+        return value, {"lstm_state": lstm_state}
+
+    def _get_action(self, state, lstm_state=None, done=None):
+        self._check_inputs(lstm_state, done)
+        action, _, _, _, lstm_state = self.agent.forward(
+            state, lstm_state
+        )
+        return action, {"lstm_state": lstm_state}
+
+    def _get_action_and_value(self, state, lstm_state=None, done=None):
+        self._check_inputs(lstm_state, done)
+        action, _, _, value, lstm_state = self.agent.forward(
+            state, lstm_state
+        )
+        # Reshape back into n_envs x n_agents
+        value = torch.reshape(value, (-1, len(self.possible_agents)))
+        # Average over agents into n_envs x 1
+        value = torch.mean(value, -1).unsqueeze(-1)
+
+        return (action, value, {"lstm_state": lstm_state})
+
+    def _check_inputs(self, lstm_state, done):
+        assert (
+            lstm_state is not None
+        ), "LSTM state must be provided. Make sure to configure any LSTM-specific settings for your curriculum."
+        return True
+
+    def _prepare_state(self, state):
+        # Call user postprocessors and flatten the observations
+        new_state = []
+        for obs in state:
+            for agent in obs:
+                obs[agent] = concatenate(flatten(obs[agent]))
+
+            padded_obs = pad_agent_data(obs, self.possible_agents, self.pad_obs)
+            new_state.append(np.stack(padded_obs.values()))
+
+        state = torch.Tensor(np.stack(new_state)).to(self.device)
+        return state
+
+    def _set_eval_mode(self):
+        self.agent.eval()
+
+    def _set_train_mode(self):
+        self.agent.train()
 
 
 def make_syllabus_env_creator(args, agent_module):
@@ -22,11 +119,28 @@ def make_syllabus_env_creator(args, agent_module):
         reward_wrapper_cls=agent_module.RewardWrapper, syllabus_wrapper=True
     )
     sample_env = sample_env_creator(env=args.env, reward_wrapper=args.reward_wrapper)
+    sample_obs, info = sample_env.reset()
 
+    flat_observation = concatenate(flatten(sample_obs[sample_env.possible_agents[0]]))
+    pad_obs = flat_observation * 0
     task_space = SyllabusTaskWrapper.task_space
-    curriculum = create_sequential_curriculum(task_space)
-    curriculum = MultiagentSharedCurriculumWrapper(curriculum, sample_env.possible_agents)
-    curriculum = make_multiprocessing_curriculum(curriculum)
+    # curriculum = create_sequential_curriculum(task_space)
+    evaluator = PufferEvaluator(None, sample_env.possible_agents, pad_obs, device=args.train.device)
+    curriculum = PrioritizedLevelReplay(
+        task_space,
+        sample_env.observation_space,
+        num_steps=args.train.batch_rows*4,
+        num_processes=args.train.num_envs,
+        num_minibatches=1,
+        gamma=args.train.gamma,
+        gae_lambda=args.train.gae_lambda,
+        task_sampler_kwargs_dict={"strategy": "value_l1"},
+        evaluator=evaluator,
+        lstm_size=args.recurrent.input_size,
+        record_stats=True,
+    )
+    curriculum = MultiagentSharedCurriculumWrapper(curriculum, sample_env.possible_agents, joint_policy=True)
+    curriculum = make_multiprocessing_curriculum(curriculum, start=False)
 
     return curriculum, environment.make_env_creator(
         reward_wrapper_cls=agent_module.RewardWrapper, syllabus=curriculum
@@ -68,6 +182,51 @@ def create_basic_tasks(unit_count):
         task_spec.TaskSpec(bp.CountEvent, {"event": "BUY_ITEM", "N": unit_count}),
         task_spec.TaskSpec(bp.CountEvent, {"event": "PLAYER_KILL", "N": unit_count}),
     ]
+
+
+class SyllabusSeedWrapper(PettingZooTaskWrapper):
+    """
+    Wrapper to handle tasks for the Neural MMO environment.
+    """
+
+    task_space = TaskSpace(200)
+
+    def __init__(self, env: gym.Env):
+        super().__init__(env)
+        self.env = env
+
+        self.task_space = SyllabusTaskWrapper.task_space
+        self.change_task(self.task_space.sample())
+        self._task_index = None
+        self.task_fn = None
+
+    def reset(self, **kwargs):
+        seed = kwargs.pop("seed", None)
+        new_task = kwargs.pop("new_task", None)
+        if new_task is not None:
+            self.change_task(new_task)
+            seed = new_task
+        elif seed is not None:
+            self.change_task(seed)
+
+        if seed is not None:
+            obs, info = self.env.reset(seed=int(seed), **kwargs)
+        else:
+            obs, info = self.env.reset(**kwargs)
+
+        return self.observation(obs), info
+
+    def change_task(self, new_task):
+        self.env.seed(int(new_task))
+        self.task = new_task
+
+    def step(self, action):
+        obs, rew, terms, truncs, info = self.env.step(action)
+        return self.observation(obs), rew, terms, truncs, info
+
+    def action_space(self, agent):
+        """Implement Neural MMO's action_space method."""
+        return self.env.action_space(agent)
 
 
 class SyllabusTaskWrapper(PettingZooTaskWrapper):

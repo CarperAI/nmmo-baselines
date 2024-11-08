@@ -58,11 +58,14 @@ def train(args, env_creator, agent_creator, syllabus=None):
         track=args.track,
     )
 
+    syllabus.curriculum.curriculum.evaluator.set_agent(data.agent)
+    syllabus.start()
+
     while not clean_pufferl.done_training(data):
         clean_pufferl.evaluate(data)
         clean_pufferl.train(data)
         if syllabus is not None:
-            syllabus.log_metrics(data.wandb, step=data.global_step)
+            syllabus.log_metrics(data.wandb, step=None)
 
     print("Done training. Saving data...")
     clean_pufferl.close(data)

@@ -7,18 +7,18 @@ import time
 
 import pufferlib
 import yaml
-
+import nmmo
 from reinforcement_learning import environment
 from train_helper import generate_replay, init_wandb, sweep, train
 import syllabus_wrapper
 
 DEBUG = False
 # See curriculum_generation/manual_curriculum.py for details
-BASELINE_CURRICULUM = "curriculum_generation/curriculum_with_embedding.pkl"
+BASELINE_CURRICULUM = "../curriculum_generation/curriculum_with_embedding.pkl"
 
 
 def load_from_config(agent, debug=False):
-    with open("config.yaml") as f:
+    with open("../config.yaml") as f:
         config = yaml.safe_load(f)
     default_keys = (
         "env train policy recurrent sweep_metadata sweep_metric sweep wandb reward_wrapper".split()
@@ -219,7 +219,7 @@ if __name__ == "__main__":
     if args.syllabus is True:
         # NOTE: Setting use_custom_reward to False will ignore the agent's custom reward
         # and only use the env-provided reward from the curriculum tasks
-        args.reward_wrapper.use_custom_reward = False
+        args.reward_wrapper.use_custom_reward = True
         syllabus, env_creator = syllabus_wrapper.make_syllabus_env_creator(args, agent_module)
     else:
         args.env.curriculum_file_path = args.curriculum

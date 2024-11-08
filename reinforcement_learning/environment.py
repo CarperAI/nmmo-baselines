@@ -1,27 +1,25 @@
 from argparse import Namespace
 
 import nmmo
-import nmmo.core.config as nc
-import nmmo.core.game_api as ng
 import pufferlib
 import pufferlib.emulation
 from pettingzoo.utils.wrappers.base_parallel import BaseParallelWrapper
 from syllabus.core import PettingZooMultiProcessingSyncWrapper as SyllabusSyncWrapper
 
-from syllabus_wrapper import SyllabusTaskWrapper
+from syllabus_wrapper import SyllabusSeedWrapper
 
 
 class Config(
-    nc.Medium,
-    nc.Terrain,
-    nc.Resource,
-    nc.Combat,
-    nc.NPC,
-    nc.Progression,
-    nc.Item,
-    nc.Equipment,
-    nc.Profession,
-    nc.Exchange,
+    nmmo.core.config.Medium,
+    nmmo.core.config.Terrain,
+    nmmo.core.config.Resource,
+    nmmo.core.config.Combat,
+    nmmo.core.config.NPC,
+    nmmo.core.config.Progression,
+    nmmo.core.config.Item,
+    nmmo.core.config.Equipment,
+    nmmo.core.config.Profession,
+    nmmo.core.config.Exchange,
 ):
     """Configuration for Neural MMO."""
 
@@ -45,7 +43,7 @@ class Config(
         self.set("RESOURCE_RESILIENT_POPULATION", env_args.resilient_population)
         self.set("COMBAT_SPAWN_IMMUNITY", env_args.spawn_immunity)
 
-        self.set("GAME_PACKS", [(ng.AgentTraining, 1)])
+        self.set("GAME_PACKS", [(nmmo.core.game_api.AgentTraining, 1)])
         self.set("CURRICULUM_FILE_PATH", env_args.curriculum_file_path)
 
 
@@ -59,15 +57,16 @@ def make_env_creator(
 
         # Add Syllabus task wrapper
         if syllabus_wrapper or syllabus is not None:
-            env = SyllabusTaskWrapper(env)
+            env = SyllabusSeedWrapper(env)
 
         # Use syllabus curriculum if provided
         if syllabus is not None:
             env = SyllabusSyncWrapper(
                 env,
                 syllabus.get_components(),
-                update_on_step=False,
+                update_on_step=syllabus.requires_step_updates,
                 task_space=env.task_space,
+                batch_size=8,
             )
 
         env = pufferlib.emulation.PettingZooPufferEnv(env)

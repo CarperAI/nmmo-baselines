@@ -121,7 +121,7 @@ def create(
     # If data_dir is provided, load the resume state
     resume_state = {}
     path = os.path.join(config.data_dir, exp_name)
-    if os.path.exists(path):
+    if False and os.path.exists(path):
         trainer_path = os.path.join(path, "trainer_state.pt")
         resume_state = torch.load(trainer_path)
         model_path = os.path.join(path, resume_state["model_name"])
