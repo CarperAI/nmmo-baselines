@@ -313,7 +313,7 @@ def evaluate(data):
                     next_lstm_state[0][:, env_id],
                     next_lstm_state[1][:, env_id],
                 )
-
+            print("puffer shape", o.shape)
             actions, logprob, value, next_lstm_state = data.policy_pool.forwards(
                 o.to(data.device), next_lstm_state
             )

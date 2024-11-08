@@ -105,6 +105,8 @@ class PufferEvaluator(Evaluator):
             new_state.append(np.stack(padded_obs.values()))
 
         state = torch.Tensor(np.stack(new_state)).to(self.device)
+        print("syllabus shape", state.shape)
+
         return state
 
     def _set_eval_mode(self):
