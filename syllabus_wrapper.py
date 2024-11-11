@@ -1,5 +1,6 @@
 """Syllabus task wrapper for NMMO."""
 
+import time
 import numpy as np
 import torch
 import copy
@@ -8,7 +9,7 @@ from reinforcement_learning import environment
 from syllabus.task_space import TaskSpace
 from syllabus.core.evaluator import CleanRLDiscreteEvaluator, Evaluator
 from syllabus.core.task_interface import PettingZooTaskWrapper
-from syllabus.curricula import SequentialCurriculum, PrioritizedLevelReplay
+from syllabus.curricula import SequentialCurriculum, PrioritizedLevelReplay, CentralizedPrioritizedLevelReplay
 from syllabus.core import MultiagentSharedCurriculumWrapper, make_multiprocessing_curriculum
 from nmmo.task.task_api import OngoingTask
 from nmmo.task.base_predicates import StayAlive
@@ -48,7 +49,6 @@ class PufferEvaluator(Evaluator):
             self.set_agent(agent)
 
     def set_agent(self, agent):
-        print("Setting agent", agent)
         original_device = "cuda"
         agent.to(self.device)
         self.agent = copy.deepcopy(agent)
@@ -105,8 +105,6 @@ class PufferEvaluator(Evaluator):
             new_state.append(np.stack(padded_obs.values()))
 
         state = torch.Tensor(np.stack(new_state)).to(self.device)
-        print("syllabus shape", state.shape)
-
         return state
 
     def _set_eval_mode(self):
@@ -125,20 +123,22 @@ def make_syllabus_env_creator(args, agent_module):
 
     flat_observation = concatenate(flatten(sample_obs[sample_env.possible_agents[0]]))
     pad_obs = flat_observation * 0
-    task_space = SyllabusTaskWrapper.task_space
+    task_space = SyllabusSeedWrapper.task_space
     # curriculum = create_sequential_curriculum(task_space)
     evaluator = PufferEvaluator(None, sample_env.possible_agents, pad_obs, device=args.train.device)
-    curriculum = PrioritizedLevelReplay(
+    curriculum = CentralizedPrioritizedLevelReplay(
         task_space,
-        sample_env.observation_space,
-        num_steps=args.train.batch_rows*4,
-        num_processes=args.train.num_envs,
-        num_minibatches=1,
+        # sample_env.observation_space,
+        num_steps=args.train.batch_rows,
+        # num_processes=args.train.num_envs,
+        num_processes=args.train.num_envs * args.env.num_agents,
+        # num_minibatches=2,
+        # buffer_size=128,
         gamma=args.train.gamma,
         gae_lambda=args.train.gae_lambda,
         task_sampler_kwargs_dict={"strategy": "value_l1"},
-        evaluator=evaluator,
-        lstm_size=args.recurrent.input_size,
+        # evaluator=evaluator,
+        # lstm_size=args.recurrent.input_size,
         record_stats=True,
     )
     curriculum = MultiagentSharedCurriculumWrapper(curriculum, sample_env.possible_agents, joint_policy=True)
@@ -204,18 +204,8 @@ class SyllabusSeedWrapper(PettingZooTaskWrapper):
 
     def reset(self, **kwargs):
         seed = kwargs.pop("seed", None)
-        new_task = kwargs.pop("new_task", None)
-        if new_task is not None:
-            self.change_task(new_task)
-            seed = new_task
-        elif seed is not None:
-            self.change_task(seed)
-
-        if seed is not None:
-            obs, info = self.env.reset(seed=int(seed), **kwargs)
-        else:
-            obs, info = self.env.reset(**kwargs)
-
+        new_task = kwargs.pop("new_task", seed)
+        obs, info = super().reset(new_task=new_task, **kwargs)
         return self.observation(obs), info
 
     def change_task(self, new_task):
@@ -223,7 +213,7 @@ class SyllabusSeedWrapper(PettingZooTaskWrapper):
         self.task = new_task
 
     def step(self, action):
-        obs, rew, terms, truncs, info = self.env.step(action)
+        obs, rew, terms, truncs, info = super().step(action)
         return self.observation(obs), rew, terms, truncs, info
 
     def action_space(self, agent):

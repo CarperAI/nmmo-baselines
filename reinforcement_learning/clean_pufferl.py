@@ -83,6 +83,7 @@ def create(
     eval_model_path: str = None,
     # Policy Pool options
     policy_selector: callable = None,
+    curriculum=None,
 ):
     if config is None:
         config = pufferlib.args.CleanPuffeRL()
@@ -247,6 +248,8 @@ def create(
         device=device,
         start_time=start_time,
         eval_mode=eval_mode,
+        curriculum=curriculum,
+        prev_value=None,
     )
 
 
@@ -313,7 +316,7 @@ def evaluate(data):
                     next_lstm_state[0][:, env_id],
                     next_lstm_state[1][:, env_id],
                 )
-            print("puffer shape", o.shape)
+
             actions, logprob, value, next_lstm_state = data.policy_pool.forwards(
                 o.to(data.device), next_lstm_state
             )
@@ -324,6 +327,25 @@ def evaluate(data):
                 data.next_lstm_state[1][:, env_id] = c
 
             value = value.flatten()
+
+            # Syllabus curriculum update
+            if data.curriculum is not None and data.prev_value is not None:
+                tasks = [info["task_id"] for info in i["learner"]]
+                env_ids = [info["env_id"] for info in i["learner"]]
+
+                update = {
+                    "update_type": "on_demand",
+                    "metrics": {
+                        "value": data.prev_value,
+                        "next_value": value,
+                        "rew": r,
+                        "dones": d,
+                        "tasks": tasks,
+                        "env_ids": env_ids
+                    },
+                }
+                data.curriculum.update(update)
+            data.prev_value = value
 
         with misc_profiler:
             actions = actions.cpu().numpy()

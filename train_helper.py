@@ -10,7 +10,7 @@ import numpy as np
 import pufferlib.policy_pool as pp
 from nmmo.render.replay_helper import FileReplayHelper
 from nmmo.task.task_spec import make_task_from_spec
-
+from syllabus.curricula import PrioritizedLevelReplay
 from reinforcement_learning import clean_pufferl
 
 # Related to torch.use_deterministic_algorithms(True)
@@ -56,10 +56,13 @@ def train(args, env_creator, agent_creator, syllabus=None):
         vectorization=args.vectorization,
         exp_name=args.exp_name,
         track=args.track,
+        curriculum=syllabus,
     )
 
-    syllabus.curriculum.curriculum.evaluator.set_agent(data.agent)
-    syllabus.start()
+    if syllabus is not None:
+        if isinstance(syllabus.curriculum, PrioritizedLevelReplay):
+            syllabus.curriculum.curriculum.evaluator.set_agent(data.agent)
+        syllabus.start()
 
     while not clean_pufferl.done_training(data):
         clean_pufferl.evaluate(data)
