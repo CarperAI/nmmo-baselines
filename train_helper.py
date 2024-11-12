@@ -39,7 +39,7 @@ def init_wandb(args, resume=True):
         "name": args.exp_name,
         "monitor_gym": True,
         "save_code": True,
-        "resume": resume,
+        "resume": False,
     }
     if args.wandb.group is not None:
         wandb_kwargs["group"] = args.wandb.group

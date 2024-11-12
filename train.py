@@ -14,11 +14,11 @@ import syllabus_wrapper
 
 DEBUG = False
 # See curriculum_generation/manual_curriculum.py for details
-BASELINE_CURRICULUM = "../curriculum_generation/curriculum_with_embedding.pkl"
+BASELINE_CURRICULUM = "curriculum_generation/curriculum_with_embedding.pkl"
 
 
 def load_from_config(agent, debug=False):
-    with open("../config.yaml") as f:
+    with open("config.yaml") as f:
         config = yaml.safe_load(f)
     default_keys = (
         "env train policy recurrent sweep_metadata sweep_metric sweep wandb reward_wrapper".split()
