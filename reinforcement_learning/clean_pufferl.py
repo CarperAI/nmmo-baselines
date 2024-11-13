@@ -123,15 +123,16 @@ def create(
     resume_state = {}
     path = os.path.join(config.data_dir, exp_name)
     if False and os.path.exists(path):
-        trainer_path = os.path.join(path, "trainer_state.pt")
-        resume_state = torch.load(trainer_path)
-        model_path = os.path.join(path, resume_state["model_name"])
-        agent = torch.load(model_path, map_location=device)
-        print(
-            f'Resumed from update {resume_state["update"]} '
-            f'with policy {resume_state["model_name"]}'
-        )
-    else:
+        pass
+        #     trainer_path = os.path.join(path, "trainer_state.pt")
+        #     resume_state = torch.load(trainer_path)
+        #     model_path = os.path.join(path, resume_state["model_name"])
+        #     agent = torch.load(model_path, map_location=device)
+        #     print(
+        #         f'Resumed from update {resume_state["update"]} '
+        #         f'with policy {resume_state["model_name"]}'
+        #     )
+    elif not eval_mode:
         agent = pufferlib.emulation.make_object(
             agent, agent_creator, [pool.driver_env], agent_kwargs
         )

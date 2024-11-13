@@ -179,7 +179,7 @@ class BaseStatWrapper(BaseParallelWrapper):
         for key, val in list(achieved.items()) + list(performed.items()):
             info["stats"][key] = float(val)
 
-        if self._stat_prefix:
+        if self._stat_prefix is not None:
             info = {self._stat_prefix: info}
 
         return truncated, info
