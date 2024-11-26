@@ -9,7 +9,7 @@ from reinforcement_learning import environment
 from syllabus.task_space import DiscreteTaskSpace
 from syllabus.core.evaluator import CleanRLDiscreteEvaluator, Evaluator
 from syllabus.core.task_interface import PettingZooTaskWrapper
-from syllabus.curricula import SequentialCurriculum, PrioritizedLevelReplay, CentralizedPrioritizedLevelReplay
+from syllabus.curricula import SequentialCurriculum, PrioritizedLevelReplay, CentralizedPrioritizedLevelReplay, DomainRandomization
 from syllabus.core import MultiagentSharedCurriculumWrapper, make_multiprocessing_curriculum
 from nmmo.task.task_api import OngoingTask
 from nmmo.task.base_predicates import StayAlive
@@ -125,7 +125,7 @@ def make_syllabus_env_creator(args, agent_module):
     pad_obs = flat_observation * 0
     task_space = SyllabusSeedWrapper.task_space
     # curriculum = create_sequential_curriculum(task_space)
-    evaluator = PufferEvaluator(None, sample_env.possible_agents, pad_obs, device=args.train.device)
+    # evaluator = PufferEvaluator(None, sample_env.possible_agents, pad_obs, device=args.train.device)
     curriculum = CentralizedPrioritizedLevelReplay(
         task_space,
         # sample_env.observation_space,
@@ -136,11 +136,12 @@ def make_syllabus_env_creator(args, agent_module):
         # buffer_size=128,
         gamma=args.train.gamma,
         gae_lambda=args.train.gae_lambda,
-        task_sampler_kwargs_dict={"strategy": "value_l1"},
+        task_sampler_kwargs_dict={"strategy": "value_l1", "temperature": 0.3, "staleness_coef": 0.3, "alpha": 0.25},
         # evaluator=evaluator,
         # lstm_size=args.recurrent.input_size,
         record_stats=True,
     )
+    # curriculum = DomainRandomization(task_space)
     curriculum = MultiagentSharedCurriculumWrapper(curriculum, sample_env.possible_agents, joint_policy=True)
     curriculum = make_multiprocessing_curriculum(curriculum, start=False)
 

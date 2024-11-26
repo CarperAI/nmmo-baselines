@@ -18,7 +18,7 @@ train:
   seed: 1
   torch_deterministic: True
   device: cuda
-  total_timesteps: 10_000_000
+  total_timesteps: 20_000_000
   learning_rate: 1.5e-4
   anneal_lr: True
   gamma: 0.99
@@ -32,7 +32,7 @@ train:
   max_grad_norm: 0.5
   target_kl: ~
 
-  num_envs: 16
+  num_envs: 15
   envs_per_worker: 1
   envs_per_batch: 8
   env_pool: True

@@ -236,7 +236,7 @@ if __name__ == "__main__":
         args.exp_name = f"nmmo_{time.strftime('%Y%m%d_%H%M%S')}"
 
     if args.mode == "train":
-        train(args, env_creator, agent_creator, syllabus)
+        train(args, env_creator, agent_creator, agent_module, syllabus=syllabus)
         exit(0)
     elif args.mode == "sweep":
         sweep(args, env_creator, agent_creator)
