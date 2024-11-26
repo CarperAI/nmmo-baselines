@@ -335,15 +335,12 @@ def evaluate(data):
                 env_ids = [info["env_id"] for info in i["learner"]]
 
                 update = {
-                    "update_type": "on_demand",
-                    "metrics": {
-                        "value": data.prev_value,
-                        "next_value": value,
-                        "rew": r,
-                        "dones": d,
-                        "tasks": tasks,
-                        "env_ids": env_ids
-                    },
+                    "value": data.prev_value,
+                    "next_value": value,
+                    "rew": r,
+                    "dones": d,
+                    "tasks": tasks,
+                    "env_ids": env_ids
                 }
                 data.curriculum.update(update)
             data.prev_value = value

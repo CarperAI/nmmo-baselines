@@ -78,7 +78,7 @@ def train(args, env_creator, agent_creator, syllabus=None):
         env_outputs = evaluate_agent(args, eval_data, env_outputs, data.wandb, data.global_step)
 
         if syllabus is not None:
-            syllabus.log_metrics(data.wandb, step=data.global_step)
+            syllabus.log_metrics(data.wandb, [], step=data.global_step)
 
         clean_pufferl.train(data)
 
