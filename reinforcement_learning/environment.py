@@ -4,7 +4,7 @@ import nmmo
 import pufferlib
 import pufferlib.emulation
 from pettingzoo.utils.wrappers.base_parallel import BaseParallelWrapper
-from syllabus.core import PettingZooMultiProcessingSyncWrapper as SyllabusSyncWrapper
+from syllabus.core import PettingZooSyncWrapper as SyllabusSyncWrapper
 
 from syllabus_wrapper import SyllabusSeedWrapper
 
@@ -63,9 +63,8 @@ def make_env_creator(
         if syllabus is not None:
             env = SyllabusSyncWrapper(
                 env,
-                syllabus.get_components(),
-                update_on_step=syllabus.requires_step_updates,
-                task_space=env.task_space,
+                env.task_space,
+                syllabus.components,
                 batch_size=8,
             )
 

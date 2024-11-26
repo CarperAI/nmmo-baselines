@@ -34,7 +34,7 @@ train:
 
   num_envs: 16
   envs_per_worker: 1
-  envs_per_batch: 6
+  envs_per_batch: 8
   env_pool: True
   verbose: True
   data_dir: runs

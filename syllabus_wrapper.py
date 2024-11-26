@@ -6,7 +6,7 @@ import torch
 import copy
 from collections import defaultdict
 from reinforcement_learning import environment
-from syllabus.task_space import TaskSpace
+from syllabus.task_space import DiscreteTaskSpace
 from syllabus.core.evaluator import CleanRLDiscreteEvaluator, Evaluator
 from syllabus.core.task_interface import PettingZooTaskWrapper
 from syllabus.curricula import SequentialCurriculum, PrioritizedLevelReplay, CentralizedPrioritizedLevelReplay
@@ -191,13 +191,13 @@ class SyllabusSeedWrapper(PettingZooTaskWrapper):
     Wrapper to handle tasks for the Neural MMO environment.
     """
 
-    task_space = TaskSpace(200)
+    task_space = DiscreteTaskSpace(200)
 
     def __init__(self, env: gym.Env):
         super().__init__(env)
         self.env = env
 
-        self.task_space = SyllabusTaskWrapper.task_space
+        self.task_space = SyllabusSeedWrapper.task_space
         self.change_task(self.task_space.sample())
         self._task_index = None
         self.task_fn = None
@@ -227,7 +227,7 @@ class SyllabusTaskWrapper(PettingZooTaskWrapper):
     """
 
     # task_space = TaskSpace((18, 200), [tuple(np.arange(18)), tuple(np.arange(200))])
-    task_space = TaskSpace(200)
+    task_space = DiscreteTaskSpace(200)
 
     # task_space = TaskSpace((2719, 200), [tuple(np.arange(2719)), tuple(np.arange(200))])
 
